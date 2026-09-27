@@ -1,0 +1,40 @@
+[package]
+name = "kohaku-stealth"
+version = "0.1.0"
+edition = "2024"
+description = "ERC-5564 scheme 3 client: register, announce, scan, and spend."
+license = "Apache-2.0 OR MIT"
+publish = false
+
+[dependencies]
+alloy = { workspace = true, features = [
+    "network",
+    "providers",
+    "rpc",
+    "rpc-types",
+    "sol-types",
+    "transports",
+] }
+kohaku-kv-store = { workspace = true }
+postcard = { workspace = true, features = ["alloc"] }
+pqsa-core = { workspace = true }
+pqsa-per-payment = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["rt", "sync"] }
+tracing = { workspace = true }
+
+[dev-dependencies]
+alloy = { workspace = true, features = [
+    "provider-anvil-node",
+    "signer-local",
+    "signers",
+] }
+anyhow = { workspace = true }
+hex = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
+
+[lints]
+workspace = true
