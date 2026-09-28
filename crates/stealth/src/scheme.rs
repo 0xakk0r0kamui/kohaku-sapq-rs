@@ -1,18 +1,10 @@
-pub const SCHEME_ID: u64 = SchemeId3::SCHEME_ID;
+pub(crate) const SCHEME_ID: u64 = SchemeId3::SCHEME_ID;
 
-pub(crate) const EPHEMERAL_PUB_KEY_LEN: usize = 33;
-
-pub(crate) const METADATA_LEN: usize = 1089;
-
-#[must_use]
-pub(crate) fn announcement_shape_ok(ephemeral_pub_key: &[u8], metadata: &[u8]) -> bool {
-    ephemeral_pub_key.len() == EPHEMERAL_PUB_KEY_LEN && metadata.len() == METADATA_LEN
-}
-
-use pqsa_core::{ExportableSpendKey, SenderState, StealthScheme};
+use pqsa_core::{ExportableSpendKey, StealthScheme};
 use pqsa_per_payment::SchemeId3;
 use thiserror::Error;
-use tracing::{debug, info, warn};
+use tracing::{debug, trace, warn};
+use zeroize::{Zeroize, Zeroizing};
 
 #[derive(Debug, Error, Clone, Copy, PartialEq, Eq)]
 pub enum SchemeError {
@@ -52,7 +44,17 @@ impl From<pqsa_core::Error> for SchemeError {
     }
 }
 
-pub struct Master(pqsa_per_payment::Master);
+pub(crate) struct Master(pqsa_per_payment::Master);
+
+impl Drop for Master {
+    fn drop(&mut self) {
+        self.0.spending_seed.zeroize();
+        if let Some(seed) = &mut self.0.viewing_ec_seed {
+            seed.zeroize();
+        }
+        self.0.kem_seed.zeroize();
+    }
+}
 
 impl core::fmt::Debug for Master {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
@@ -61,7 +63,16 @@ impl core::fmt::Debug for Master {
 }
 
 /// Scan material. May be handed to a scanner.
-pub struct Tracking(pqsa_per_payment::Tracking);
+pub(crate) struct Tracking(pqsa_per_payment::Tracking);
+
+impl Drop for Tracking {
+    fn drop(&mut self) {
+        if let Some(seed) = &mut self.0.viewing_ec_seed {
+            seed.zeroize();
+        }
+        self.0.kem_seed.zeroize();
+    }
+}
 
 impl core::fmt::Debug for Tracking {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
@@ -71,7 +82,7 @@ impl core::fmt::Debug for Tracking {
 
 /// Output of [`keygen`].
 #[derive(Debug)]
-pub struct Keys {
+pub(crate) struct Keys {
     /// ERC-6538 blob, 1 250 bytes on success.
     pub meta_address: Vec<u8>,
     pub master: Master,
@@ -79,7 +90,7 @@ pub struct Keys {
 }
 
 /// `SchemeId3::bind` result. Constructed only by [`bind`].
-pub struct Scanner(pqsa_per_payment::Scanner);
+pub(crate) struct Scanner(pqsa_per_payment::Scanner);
 
 impl core::fmt::Debug for Scanner {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
@@ -87,9 +98,15 @@ impl core::fmt::Debug for Scanner {
     }
 }
 
-pub struct Match {
+pub(crate) struct Match {
     pub stealth_address: [u8; 20],
     matched: pqsa_per_payment::Match,
+}
+
+impl Drop for Match {
+    fn drop(&mut self) {
+        self.matched.shared_secret.zeroize();
+    }
 }
 
 impl core::fmt::Debug for Match {
@@ -102,7 +119,7 @@ impl core::fmt::Debug for Match {
 
 /// ERC-5564 `announce` arguments for scheme 3.
 #[derive(Clone, PartialEq, Eq)]
-pub struct Announcement {
+pub(crate) struct Announcement {
     pub scheme_id: u64,
     pub stealth_address: [u8; 20],
     pub ephemeral_pub_key: Vec<u8>,
@@ -120,10 +137,10 @@ impl core::fmt::Debug for Announcement {
     }
 }
 
-pub fn keygen(seed: &[u8]) -> Result<Keys, SchemeError> {
+pub(crate) fn keygen(seed: &[u8]) -> Result<Keys, SchemeError> {
     let (meta, master, tracking) = SchemeId3::keygen(seed)?;
     let meta_address = SchemeId3::meta_to_bytes(&meta);
-    info!(
+    debug!(
         scheme_id = SchemeId3::SCHEME_ID,
         meta_address_len = meta_address.len(),
         "scheme 3 keygen"
@@ -135,7 +152,7 @@ pub fn keygen(seed: &[u8]) -> Result<Keys, SchemeError> {
     })
 }
 
-pub fn bind(tracking: &Tracking, meta_address: &[u8]) -> Result<Scanner, SchemeError> {
+pub(crate) fn bind(tracking: &Tracking, meta_address: &[u8]) -> Result<Scanner, SchemeError> {
     let Some(meta) = SchemeId3::meta_from_bytes(meta_address) else {
         warn!(
             meta_address_len = meta_address.len(),
@@ -144,49 +161,21 @@ pub fn bind(tracking: &Tracking, meta_address: &[u8]) -> Result<Scanner, SchemeE
         return Err(SchemeError::Malformed);
     };
     let scanner = SchemeId3::bind(&tracking.0, &meta)?;
-    info!(meta_address_len = meta_address.len(), "scanner bound");
+    debug!(meta_address_len = meta_address.len(), "scanner bound");
     Ok(Scanner(scanner))
 }
 
-pub fn announce(
+pub(crate) fn announce_with_seed(
     meta_address: &[u8],
-    sender: &mut SenderState,
+    seed: &[u8],
 ) -> Result<Announcement, SchemeError> {
-    let Some(meta) = SchemeId3::meta_from_bytes(meta_address) else {
-        return Err(SchemeError::Malformed);
-    };
-    let announcement =
-        sender.announce_retrying::<SchemeId3, _, _>(4, |seed| SchemeId3::announce(&meta, seed))?;
-    let (stealth_address, ephemeral_pub_key, metadata) =
-        SchemeId3::announcement_to_bytes(&announcement);
-    log_announcement(
-        &stealth_address,
-        ephemeral_pub_key.len(),
-        metadata.len(),
-        "sender",
-    );
-    info!(next_sender_index = sender.counter(), "sender index advanced");
-    Ok(Announcement {
-        scheme_id: SchemeId3::SCHEME_ID,
-        stealth_address,
-        ephemeral_pub_key,
-        metadata,
-    })
-}
-
-pub fn announce_with_seed(meta_address: &[u8], seed: &[u8]) -> Result<Announcement, SchemeError> {
     let Some(meta) = SchemeId3::meta_from_bytes(meta_address) else {
         return Err(SchemeError::Malformed);
     };
     let announcement = SchemeId3::announce(&meta, seed)?;
     let (stealth_address, ephemeral_pub_key, metadata) =
         SchemeId3::announcement_to_bytes(&announcement);
-    log_announcement(
-        &stealth_address,
-        ephemeral_pub_key.len(),
-        metadata.len(),
-        "seed",
-    );
+    log_announcement(&stealth_address, ephemeral_pub_key.len(), metadata.len());
     Ok(Announcement {
         scheme_id: SchemeId3::SCHEME_ID,
         stealth_address,
@@ -195,24 +184,18 @@ pub fn announce_with_seed(meta_address: &[u8], seed: &[u8]) -> Result<Announceme
     })
 }
 
-fn log_announcement(
-    stealth_address: &[u8; 20],
-    ephemeral_pub_key_len: usize,
-    metadata_len: usize,
-    source: &'static str,
-) {
-    info!(
+fn log_announcement(stealth_address: &[u8; 20], ephemeral_pub_key_len: usize, metadata_len: usize) {
+    debug!(
         scheme_id = SchemeId3::SCHEME_ID,
         stealth_address = %alloy_address(stealth_address),
         ephemeral_pub_key_len,
         metadata_len,
-        source,
         "scheme 3 announcement"
     );
 }
 
 #[must_use]
-pub fn check(
+pub(crate) fn check(
     scanner: &Scanner,
     scheme_id: u64,
     stealth_address: &[u8; 20],
@@ -220,13 +203,13 @@ pub fn check(
     metadata: &[u8],
 ) -> Option<Match> {
     if scheme_id != SchemeId3::SCHEME_ID {
-        debug!(scheme_id, "skip announcement: scheme id");
+        trace!(scheme_id, "skip announcement: scheme id");
         return None;
     }
     let Some(announcement) =
         SchemeId3::announcement_from_bytes(stealth_address, ephemeral_pub_key, metadata)
     else {
-        debug!(
+        trace!(
             ephemeral_pub_key_len = ephemeral_pub_key.len(),
             metadata_len = metadata.len(),
             "skip announcement: shape"
@@ -234,13 +217,13 @@ pub fn check(
         return None;
     };
     let Some(matched) = SchemeId3::scan(&scanner.0, &announcement) else {
-        debug!(
+        trace!(
             stealth_address = %alloy_address(stealth_address),
             "skip announcement: not ours"
         );
         return None;
     };
-    info!(
+    debug!(
         stealth_address = %alloy_address(&matched.stealth_address),
         "scheme 3 payment matched"
     );
@@ -250,24 +233,31 @@ pub fn check(
     })
 }
 
-pub fn spend_key(master: &Master, found: &Match) -> Result<[u8; 32], SchemeError> {
-    let scalar = SchemeId3::spend_key(&master.0, &found.matched)?;
+pub(crate) fn spend_key(
+    master: &Master,
+    found: &Match,
+) -> Result<Zeroizing<[u8; 32]>, SchemeError> {
+    let scalar = Zeroizing::new(SchemeId3::spend_key(&master.0, &found.matched)?);
     let bytes = SchemeId3::spend_key_bytes(&scalar);
     let out: [u8; 32] = bytes.try_into().map_err(|_| SchemeError::Malformed)?;
-    info!(
+    debug!(
         stealth_address = %alloy_address(&found.stealth_address),
         "scheme 3 spend key derived"
     );
-    Ok(out)
+    Ok(Zeroizing::new(out))
 }
 
 #[must_use]
-pub(crate) fn sender_counter_key(sender_master: &[u8; 32]) -> [u8; 32] {
-    let mut preimage = Vec::with_capacity(8 + SchemeId3::NAME.len() + sender_master.len());
-    preimage.extend_from_slice(&SchemeId3::SCHEME_ID.to_be_bytes());
-    preimage.extend_from_slice(SchemeId3::NAME.as_bytes());
-    preimage.extend_from_slice(sender_master);
-    alloy::primitives::keccak256(preimage).0
+pub(crate) fn meta_address_is_valid(meta_address: &[u8]) -> bool {
+    SchemeId3::meta_from_bytes(meta_address).is_some()
+}
+
+pub(crate) fn announcement_is_valid(
+    stealth_address: &[u8; 20],
+    ephemeral_pub_key: &[u8],
+    metadata: &[u8],
+) -> bool {
+    SchemeId3::announcement_from_bytes(stealth_address, ephemeral_pub_key, metadata).is_some()
 }
 
 fn alloy_address(bytes: &[u8; 20]) -> alloy::primitives::Address {
@@ -434,12 +424,10 @@ mod tests {
     #[test]
     fn round_trip_and_skips() {
         let registered = keygen(&unhex(V3_09_SEED)).unwrap();
-        let mut sender = SenderState::resume([0x42; 32], 0);
-        let wire = announce(&registered.meta_address, &mut sender).unwrap();
+        let wire = announce_with_seed(&registered.meta_address, &[0x42; 64]).unwrap();
         assert_eq!(wire.scheme_id, 3);
         assert_eq!(wire.ephemeral_pub_key.len(), 33);
         assert_eq!(wire.metadata.len(), 1089);
-        assert_eq!(sender.counter(), 1);
 
         let scanner = bind(&registered.tracking, &registered.meta_address).unwrap();
         let found = check(
@@ -453,7 +441,7 @@ mod tests {
         assert_eq!(found.stealth_address, wire.stealth_address);
         let scalar = spend_key(&registered.master, &found).unwrap();
         assert_eq!(scalar.len(), 32);
-        assert_ne!(scalar, [0; 32]);
+        assert_ne!(*scalar, [0; 32]);
 
         assert!(
             check(

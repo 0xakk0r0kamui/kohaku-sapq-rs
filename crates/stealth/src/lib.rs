@@ -1,12 +1,22 @@
 #![doc = include_str!("../README.md")]
 
-mod chain;
-mod client;
+pub mod contracts;
+pub mod indexer;
+pub mod payment;
+pub mod provider;
 mod scheme;
+pub mod scheme3;
+pub mod syncer;
 
-pub use chain::{Asset, ChainError, Deployment, Record, SyncReport};
-pub use client::{Payment, Scheme3Client, Scheme3Error, Transfer};
-pub use scheme::{
-    Announcement, Keys, Master, Match, SCHEME_ID, Scanner, SchemeError, Tracking, announce,
-    announce_with_seed, bind, check, keygen, spend_key,
+pub use contracts::Deployment;
+pub use indexer::{IndexerConfig, SyncReport};
+pub use payment::{PaymentBuilder, PaymentError, PreparedPayment};
+pub use provider::{MatchedPayment, StealthProvider, StealthProviderError};
+pub use scheme3::{
+    AccountSeed, Announcement, GeneratedStealthAddress, MasterKey, MatchedAnnouncement, SCHEME_ID,
+    Scanner, Scheme3Account, SchemeError, StealthMetaAddress, StealthPrivateKey, TrackingKey,
+};
+pub use syncer::{
+    AnnouncementRecord, AnnouncementSyncer, AnnouncementSyncerBackend, FetchResult,
+    RpcAnnouncementSyncer, SyncerError,
 };
