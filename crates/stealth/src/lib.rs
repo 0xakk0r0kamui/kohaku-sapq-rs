@@ -13,8 +13,9 @@ pub use indexer::{IndexerConfig, SyncReport};
 pub use payment::{PaymentBuilder, PaymentError, PreparedPayment};
 pub use provider::{MatchedPayment, StealthProvider, StealthProviderError};
 pub use scheme3::{
-    AccountSeed, Announcement, GeneratedStealthAddress, MasterKey, MatchedAnnouncement, SCHEME_ID,
-    Scanner, Scheme3Account, SchemeError, StealthMetaAddress, StealthPrivateKey, TrackingKey,
+    AccountSeed, Announcement, DerivedScheme3Account, GeneratedStealthAddress, MasterKey,
+    MatchedAnnouncement, SCHEME_ID, Scanner, Scheme3Account, SchemeError, StealthMetaAddress,
+    StealthPrivateKey, TrackingKey,
 };
 pub use syncer::{
     AnnouncementRecord, AnnouncementSyncer, AnnouncementSyncerBackend, FetchResult,

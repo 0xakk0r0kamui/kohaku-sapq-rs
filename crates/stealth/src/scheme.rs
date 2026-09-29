@@ -1,6 +1,6 @@
 pub(crate) const SCHEME_ID: u64 = SchemeId3::SCHEME_ID;
 
-use pqsa_core::{ExportableSpendKey, StealthScheme};
+use pqsa_core::{ExportableSpendKey, StealthScheme, keygen_seed};
 use pqsa_per_payment::SchemeId3;
 use thiserror::Error;
 use tracing::{debug, trace, warn};
@@ -26,6 +26,8 @@ pub enum SchemeError {
     MasterKeyMismatch,
     #[error("address mapping is not closed")]
     AddressMappingOpen,
+    #[error("key generation retry limit reached")]
+    KeygenExhausted,
 }
 
 impl From<pqsa_core::Error> for SchemeError {
@@ -150,6 +152,28 @@ pub(crate) fn keygen(seed: &[u8]) -> Result<Keys, SchemeError> {
         master: Master(master),
         tracking: Tracking(tracking),
     })
+}
+
+pub(crate) fn keygen_from_master(master: &[u8]) -> Result<(Keys, u64), SchemeError> {
+    for index in 0..1_024 {
+        match keygen_from_master_at(master, index) {
+            Ok(keys) => return Ok((keys, index)),
+            Err(SchemeError::NoValidScalar | SchemeError::SpendingKeyDelegated) => {}
+            Err(error) => return Err(error),
+        }
+    }
+    Err(SchemeError::KeygenExhausted)
+}
+
+pub(crate) fn keygen_from_master_at(master: &[u8], index: u64) -> Result<Keys, SchemeError> {
+    let seed = Zeroizing::new(keygen_seed(
+        master,
+        SchemeId3::SCHEME_ID,
+        SchemeId3::NAME.as_bytes(),
+        index,
+        SchemeId3::KEYGEN_SEED_BYTES,
+    )?);
+    keygen(seed.as_slice())
 }
 
 pub(crate) fn bind(tracking: &Tracking, meta_address: &[u8]) -> Result<Scanner, SchemeError> {

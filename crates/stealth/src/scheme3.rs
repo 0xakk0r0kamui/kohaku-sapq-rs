@@ -103,7 +103,41 @@ pub struct Scheme3Account {
     tracking_key: TrackingKey,
 }
 
+#[derive(Debug)]
+pub struct DerivedScheme3Account {
+    pub account: Scheme3Account,
+    pub keygen_index: u64,
+}
+
 impl Scheme3Account {
+    /// Derives the first valid account from a wallet-provided 32-byte master key.
+    ///
+    /// This matches the key derivation used by the TypeScript Kohaku plugin.
+    ///
+    /// # Errors
+    ///
+    /// Returns an engine error when the master key has the wrong length or no valid account can
+    /// be derived within the retry limit.
+    pub fn from_keygen_master(master: &[u8]) -> Result<DerivedScheme3Account, SchemeError> {
+        let (keys, keygen_index) = scheme::keygen_from_master(master)?;
+        Ok(DerivedScheme3Account {
+            account: Self::from_keys(keys),
+            keygen_index,
+        })
+    }
+
+    /// Restores an account at a previously selected key-generation index.
+    ///
+    /// # Errors
+    ///
+    /// Returns an engine error when the master key or index does not produce valid key material.
+    pub fn from_keygen_master_at(master: &[u8], keygen_index: u64) -> Result<Self, SchemeError> {
+        Ok(Self::from_keys(scheme::keygen_from_master_at(
+            master,
+            keygen_index,
+        )?))
+    }
+
     /// Derives an account from the scheme's 128-byte key-generation seed.
     ///
     /// # Errors
@@ -111,12 +145,15 @@ impl Scheme3Account {
     /// Returns an engine error when the seed has the wrong length or contains invalid key
     /// material.
     pub fn from_seed(seed: &[u8]) -> Result<Self, SchemeError> {
-        let keys = scheme::keygen(seed)?;
-        Ok(Self {
+        Ok(Self::from_keys(scheme::keygen(seed)?))
+    }
+
+    fn from_keys(keys: scheme::Keys) -> Self {
+        Self {
             meta_address: StealthMetaAddress(keys.meta_address),
             master_key: MasterKey(keys.master),
             tracking_key: TrackingKey(keys.tracking),
-        })
+        }
     }
 
     #[must_use]
@@ -356,6 +393,52 @@ pub fn derive_stealth_private_key(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use alloy::primitives::{address, b256, keccak256};
+
+    #[test]
+    fn keygen_master_matches_the_typescript_plugin() {
+        let derived = Scheme3Account::from_keygen_master(&[7; 32]).unwrap();
+
+        assert_eq!(derived.keygen_index, 0);
+        assert_eq!(
+            keccak256(derived.account.meta_address().as_bytes()),
+            b256!("8db2b7b7eded349ced2c3f5d7ac7c3885c903f72c55dc44582704745e8cb3966")
+        );
+
+        let restored =
+            Scheme3Account::from_keygen_master_at(&[7; 32], derived.keygen_index).unwrap();
+        assert_eq!(restored.meta_address(), derived.account.meta_address());
+    }
+
+    #[test]
+    fn keygen_master_rejects_wrong_lengths() {
+        assert!(Scheme3Account::from_keygen_master(&[7; 31]).is_err());
+        assert!(Scheme3Account::from_keygen_master_at(&[7; 33], 0).is_err());
+    }
+
+    #[test]
+    fn rust_interop_fixture_is_stable() {
+        let account = Scheme3Account::from_keygen_master(&[7; 32])
+            .unwrap()
+            .account;
+        let generated =
+            generate_stealth_address_with_seed(account.meta_address(), &[0x44; 64]).unwrap();
+
+        assert_eq!(
+            generated.stealth_address,
+            address!("3d2fe245c88ae077b313a34fe65f858c5e36eb63")
+        );
+        assert_eq!(
+            generated.announcement.ephemeral_public_key(),
+            hex::decode("032c0b7cf95324a07d05398b240174dc0c2be444d96b159aa6c7f7b1e668680991")
+                .unwrap()
+        );
+        assert_eq!(generated.announcement.metadata().len(), 1_089);
+        assert_eq!(
+            keccak256(generated.announcement.metadata()),
+            b256!("659bbed65ea29fc7e1b547e0f10b39c53ce8ba8b1bef21ab6207ae1e960b59f0")
+        );
+    }
 
     #[test]
     fn public_secret_types_redact_debug_output() {
