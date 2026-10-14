@@ -25,6 +25,7 @@ Kohaku-rs is a collection of rust crates for working with Ethereum privacy proto
 - [`kohaku-userop-kit`](./crates/userop-kit/) - 4337 user operation builder, signer, and paymaster library.
 - [`kohaku-merkle-tree`](./crates/merkle-tree/) - Generic merkle tree implementation.
 - [`kohaku-fork-kit`](./crates/fork-kit/) - Forking kit for testing and development of kohaku-rs crates.
+- [`kohaku-tor-rpc`](./crates/tor-rpc/) - Alloy JSON-RPC over Arti, with shared or session-isolated circuits.
 
 ### Experiments
 

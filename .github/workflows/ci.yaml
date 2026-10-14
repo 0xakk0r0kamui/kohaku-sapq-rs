@@ -44,5 +44,5 @@ jobs:
         workspaces: "crates"
 
     - run: nix develop .#ci
-    - run: nix develop .#ci --command bash -c "cd crates && cargo check --target wasm32-unknown-unknown --workspace --exclude kohaku-fork-kit --lib"
-    - run: nix develop .#ci --command bash -c "cd crates && cargo clippy --target wasm32-unknown-unknown --workspace --exclude kohaku-fork-kit --lib"
+    - run: nix develop .#ci --command bash -c "cd crates && cargo check --target wasm32-unknown-unknown --workspace --exclude kohaku-fork-kit --exclude kohaku-tor-rpc --lib"
+    - run: nix develop .#ci --command bash -c "cd crates && cargo clippy --target wasm32-unknown-unknown --workspace --exclude kohaku-fork-kit --exclude kohaku-tor-rpc --lib"

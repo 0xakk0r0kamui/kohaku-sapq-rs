@@ -66,6 +66,10 @@
 
               just
               sops
+
+              # alloy's hyper feature pulls hyper-tls, which links OpenSSL on Linux.
+              pkg-config
+              openssl
             ];
           };
 
@@ -84,6 +88,10 @@
               alto
               tornadocashRelayer
               redis
+
+              # alloy's hyper feature pulls hyper-tls, which links OpenSSL on Linux.
+              pkg-config
+              openssl
             ];
           };
         };
