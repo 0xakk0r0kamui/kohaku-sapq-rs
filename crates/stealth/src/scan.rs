@@ -4,7 +4,7 @@ use alloy::primitives::Address;
 use futures::{Stream, TryStreamExt, stream};
 
 use crate::{
-    scheme3::{Match, Scanner, Scheme3Account, SchemeError, StealthPrivateKey, scan_announcement},
+    scheme3::{Match, Scanner, Scheme3Account, SchemeError, SpendKey, scan_announcement},
     syncer::{AnnouncementRecord, FetchEvent},
 };
 
@@ -31,7 +31,7 @@ impl MatchedStealthAddress {
     }
 
     /// Derives the key for this address. Fails if `account` does not own the address.
-    pub fn spend_key(&self, account: &Scheme3Account) -> Result<StealthPrivateKey, SchemeError> {
+    pub fn spend_key(&self, account: &Scheme3Account) -> Result<SpendKey, SchemeError> {
         account.spend_key(&self.match_result)
     }
 }
@@ -93,12 +93,10 @@ where
     })
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(target_arch = "wasm32")))]
 mod tests {
     use alloy::primitives::B256;
     use futures::{StreamExt, pin_mut};
-    use pqsa_core::StealthScheme;
-    use pqsa_per_payment::SchemeId3;
     use rand::{SeedableRng, rngs::StdRng};
 
     use super::*;
@@ -118,8 +116,8 @@ mod tests {
             Address::from(second.stealth_address),
         ];
         assert_ne!(expected[0], expected[1]);
-        let nonmatch =
-            SchemeId3::announcement_from_bytes(&[0; 20], &[0x02; 33], &[0; 1089]).unwrap();
+        let mut nonmatch = first.clone();
+        nonmatch.stealth_address = [0; 20];
         let record = |announcement, index| {
             AnnouncementRecord::new(
                 announcement,

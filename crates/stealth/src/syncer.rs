@@ -144,13 +144,15 @@ pub enum FetchError {
 }
 
 /// Streams announcements in block and log order.
+/// Emits each RPC page before fetching the next page in the same batch.
 /// Both range endpoints are inclusive. The range is limited to `deployment.start_block`
 /// through the finalized block read on first poll. Use `from_block..=u64::MAX` to scan to that block.
 /// Invalid scheme 3 payloads are skipped and counted in [`FetchEvent::RangeFetched`].
 ///
 /// # Errors
 ///
-/// Yields one error, then ends. The failed range has no `RangeFetched` event.
+/// Yields one error, then ends. Earlier pages may have been emitted, but the failed
+/// range has no `RangeFetched` event. Replay that range and deduplicate its logs.
 pub fn get_announcements(
     provider: &impl Provider,
     deployment: Deployment,
@@ -178,12 +180,14 @@ pub fn get_announcements(
             .map(move |range| {
                 let block_limit = Arc::clone(&block_limit);
                 async move {
-                    let logs =
-                        fetch_logs(provider, deployment.announcer, &range, &block_limit).await?;
+                    let (logs, next_block) =
+                        fetch_page(provider, deployment.announcer, &range, &block_limit).await?;
                     Ok::<_, FetchError>(Batch {
                         range,
                         logs: logs.into_iter(),
                         rejected_logs: 0,
+                        next_block,
+                        block_limit,
                     })
                 }
             })
@@ -191,7 +195,7 @@ pub fn get_announcements(
 
         Ok(stream::try_unfold(
             (windows, None::<Batch>),
-            |(mut windows, mut current)| async move {
+            move |(mut windows, mut current)| async move {
                 loop {
                     if let Some(batch) = &mut current {
                         if let Some(record) = batch.next_record()? {
@@ -199,6 +203,18 @@ pub fn get_announcements(
                                 FetchEvent::Announcement(record),
                                 (windows, current),
                             )));
+                        }
+                        if let Some(from) = batch.next_block {
+                            let (logs, next_block) = fetch_page(
+                                provider,
+                                deployment.announcer,
+                                &(from..=*batch.range.end()),
+                                &batch.block_limit,
+                            )
+                            .await?;
+                            batch.logs = logs.into_iter();
+                            batch.next_block = next_block;
+                            continue;
                         }
                         let event = FetchEvent::RangeFetched {
                             range: batch.range.clone(),
@@ -217,15 +233,14 @@ pub fn get_announcements(
     .try_flatten()
 }
 
-async fn fetch_logs(
+async fn fetch_page(
     provider: &impl Provider,
     announcer: Address,
     range: &RangeInclusive<u64>,
     block_limit: &AtomicU64,
-) -> Result<Vec<Log>, FetchError> {
-    let mut from = *range.start();
+) -> Result<(Vec<Log>, Option<u64>), FetchError> {
+    let from = *range.start();
     let to = *range.end();
-    let mut logs = Vec::new();
     loop {
         let size = block_limit.load(Ordering::Relaxed);
         let end = from.saturating_add(size - 1).min(to);
@@ -237,11 +252,9 @@ async fn fetch_logs(
             .to_block(end);
         match provider.get_logs(&filter).await {
             Ok(page) => {
-                logs.extend(validate_logs(page, announcer, &(from..=end))?);
-                if end == to {
-                    return Ok(logs);
-                }
-                from = end + 1;
+                let logs = validate_logs(page, announcer, &(from..=end))?;
+                let next_block = if end == to { None } else { Some(end + 1) };
+                return Ok((logs, next_block));
             }
             Err(error) if end > from && is_log_limit(&error) => {
                 let blocks = end - from + 1;
@@ -280,6 +293,8 @@ struct Batch {
     range: RangeInclusive<u64>,
     logs: std::vec::IntoIter<Log>,
     rejected_logs: usize,
+    next_block: Option<u64>,
+    block_limit: Arc<AtomicU64>,
 }
 
 impl Batch {
@@ -368,7 +383,7 @@ fn validate_logs(
     Ok(logs)
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(target_arch = "wasm32")))]
 mod tests {
     use std::{collections::BTreeMap, sync::Mutex};
 
@@ -407,8 +422,8 @@ mod tests {
             schemeId: U256::from(SCHEME_ID),
             stealthAddress: Address::repeat_byte(0xaa),
             caller: Address::repeat_byte(0xbb),
-            ephemeralPubKey: vec![0x02; 33].into(),
-            metadata: vec![0; 1089].into(),
+            ephemeralPubKey: vec![0x02; pqsa_per_payment::EPHEMERAL_PUB_KEY_BYTES].into(),
+            metadata: vec![0].into(),
         };
         Log {
             inner: alloy::primitives::Log {
@@ -473,10 +488,10 @@ mod tests {
         let (provider, asserter) = mock(3);
         let mut logs = vec![log(2, 0), log(1, 0)];
         for (index, epk, metadata) in [
-            (1, vec![0x02; 33], vec![0; 2000]),
-            (2, vec![0; 33], vec![0; 1089]),
-            (3, vec![0x02; 32], vec![0; 1089]),
-            (4, vec![0x02; 33], vec![0; 1088]),
+            (1, vec![0x02; 1120], vec![0]),
+            (2, vec![0; 1121], vec![0]),
+            (3, vec![0x02; 1122], vec![0]),
+            (4, vec![0x02; 1121], vec![]),
         ] {
             let mut malformed = log(1, index);
             let event = AnnouncementEvent {
@@ -648,8 +663,12 @@ mod tests {
     #[test]
     fn invalid_logs() {
         let valid = log(1, 0);
-        let mut missing = valid.clone();
-        missing.block_number = None;
+        let mut missing_block_number = valid.clone();
+        missing_block_number.block_number = None;
+        let mut missing_block_hash = valid.clone();
+        missing_block_hash.block_hash = None;
+        let mut missing_log_index = valid.clone();
+        missing_log_index.log_index = None;
         let mut removed = valid.clone();
         removed.removed = true;
         let mut foreign = valid.clone();
@@ -659,7 +678,9 @@ mod tests {
         let mut other_scheme = valid.clone();
         other_scheme.topics_mut()[1] = B256::ZERO;
         for logs in [
-            vec![missing],
+            vec![missing_block_number],
+            vec![missing_block_hash],
+            vec![missing_log_index],
             vec![removed],
             vec![foreign],
             vec![log(2, 0)],
@@ -933,6 +954,41 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn emits_records_before_fetching_next_page() {
+        let (root, asserter) = mock(3);
+        asserter.push_failure_msg("range too large");
+        asserter.push_success(&vec![log(0, 0)]);
+        let (next_tx, next_rx) = oneshot::channel();
+        let provider = MockProvider {
+            root: root.root().clone(),
+            responses: Mutex::new(BTreeMap::from([(2, next_rx)])),
+            requested: Mutex::new(Vec::new()),
+        };
+        let events = get_announcements(
+            &provider,
+            DEPLOYMENT,
+            0..=3,
+            FetchConfig {
+                prefetch: NonZeroUsize::new(1).unwrap(),
+                ..Default::default()
+            },
+        );
+        pin_mut!(events);
+        let Some(Ok(Some(FetchEvent::Announcement(record)))) = events.try_next().now_or_never()
+        else {
+            panic!("first page must be emitted without waiting for the next page");
+        };
+        assert_eq!(record.block_number(), 0);
+        assert_eq!(provider.requested.lock().unwrap().len(), 2);
+        assert!(events.try_next().now_or_never().is_none());
+        assert_eq!(provider.requested.lock().unwrap().len(), 3);
+        next_tx.send(Ok(vec![])).unwrap();
+        assert!(matches!(events.try_next().await.unwrap(),
+            Some(FetchEvent::RangeFetched { range, rejected_logs: 0 }) if range == (0..=3)));
+        assert!(events.try_next().await.unwrap().is_none());
+    }
+
+    #[tokio::test]
     async fn failed_page_does_not_complete_batch() {
         let (provider, asserter) = mock(3);
         asserter.push_failure_msg("range too large");
@@ -940,6 +996,9 @@ mod tests {
         asserter.push_failure_msg("unavailable");
         let events = get_announcements(&provider, DEPLOYMENT, 0..=3, FetchConfig::default());
         pin_mut!(events);
+        assert!(
+            matches!(events.try_next().await.unwrap(), Some(FetchEvent::Announcement(record)) if record.block_number() == 0)
+        );
         assert!(matches!(events.try_next().await, Err(FetchError::Rpc(_))));
         assert!(events.try_next().await.unwrap().is_none());
         assert!(asserter.read_q().is_empty());

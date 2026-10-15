@@ -10,7 +10,7 @@ pub struct Payment {
     pub meta_address: Bytes,
     pub stealth_address: Address,
     pub spend_key: Bytes,
-    pub epk_field: Bytes,
+    pub ephemeral_pub_key: Bytes,
     pub metadata: Bytes,
 }
 
@@ -33,7 +33,7 @@ impl Payment {
     pub fn announcement(&self) -> StealthAddress {
         SchemeId3::announcement_from_bytes(
             &self.stealth_address.into_array(),
-            &self.epk_field,
+            &self.ephemeral_pub_key,
             &self.metadata,
         )
         .unwrap()

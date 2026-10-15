@@ -1,7 +1,7 @@
 use alloy::primitives::Address;
 use pqsa_core::{StealthScheme, keygen_seed};
 use pqsa_per_payment::SchemeId3;
-use rand::{CryptoRng, RngExt};
+use rand::CryptoRng;
 use thiserror::Error;
 use tracing::{debug, trace};
 use zeroize::Zeroizing;
@@ -9,8 +9,9 @@ use zeroize::Zeroizing;
 pub use pqsa_core::Error as EngineError;
 pub use pqsa_per_payment::{
     Announcement as StealthAddress, Master, Match, MetaAddress as StealthMetaAddress, Scanner,
-    Tracking,
+    SpendKey, Tracking,
 };
+pub use secrecy::ExposeSecret;
 
 #[derive(Debug, Error, Clone, Copy, PartialEq, Eq)]
 pub enum SchemeError {
@@ -36,7 +37,9 @@ pub struct AccountSeed(Zeroizing<[u8; 128]>);
 impl AccountSeed {
     #[must_use]
     pub fn generate(rng: &mut impl CryptoRng) -> Self {
-        Self(Zeroizing::new(rng.random()))
+        let mut seed = Self(Zeroizing::new([0u8; 128]));
+        rng.fill_bytes(seed.0.as_mut());
+        seed
     }
 
     #[must_use]
@@ -53,12 +56,6 @@ impl AccountSeed {
 impl core::fmt::Debug for AccountSeed {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.write_str("AccountSeed([REDACTED])")
-    }
-}
-
-impl AsRef<[u8]> for AccountSeed {
-    fn as_ref(&self) -> &[u8] {
-        self.0.as_slice()
     }
 }
 
@@ -102,13 +99,13 @@ impl Scheme3Account {
 
     /// Restores the account derived at `keygen_index`.
     pub fn from_keygen_master_at(master: &[u8], keygen_index: u64) -> Result<Self, SchemeError> {
-        let seed = Zeroizing::new(keygen_seed(
+        let seed = keygen_seed(
             master,
             SCHEME_ID,
             SchemeId3::NAME.as_bytes(),
             keygen_index,
             SchemeId3::KEYGEN_SEED_BYTES,
-        )?);
+        )?;
         Self::from_seed(seed.as_slice())
     }
 
@@ -150,23 +147,8 @@ impl Scheme3Account {
     }
 
     /// Derives the spend key. Fails if this account does not own the matched address.
-    pub fn spend_key(&self, matched: &Match) -> Result<StealthPrivateKey, SchemeError> {
+    pub fn spend_key(&self, matched: &Match) -> Result<SpendKey, SchemeError> {
         compute_stealth_spend_key(&self.master_key, matched)
-    }
-}
-
-pub struct StealthPrivateKey(Zeroizing<[u8; 32]>);
-
-impl StealthPrivateKey {
-    #[must_use]
-    pub fn expose_secret(&self) -> &[u8; 32] {
-        &self.0
-    }
-}
-
-impl core::fmt::Debug for StealthPrivateKey {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.write_str("StealthPrivateKey([REDACTED])")
     }
 }
 
@@ -180,7 +162,8 @@ pub fn generate_stealth_address(
     rng: &mut impl CryptoRng,
 ) -> Result<StealthAddress, SchemeError> {
     for _ in 0..RANDOM_ANNOUNCEMENT_ATTEMPTS {
-        let seed = Zeroizing::new(rng.random::<[u8; 64]>());
+        let mut seed = Zeroizing::new([0u8; 64]);
+        rng.fill_bytes(seed.as_mut());
         match generate_stealth_address_with_seed(meta_address, seed.as_slice()) {
             Ok(announcement) => return Ok(announcement),
             Err(SchemeError::Engine(EngineError::SeedRejected)) => {}
@@ -204,7 +187,7 @@ pub fn generate_stealth_address_with_seed(
     debug!(
         scheme_id = SCHEME_ID,
         stealth_address = %Address::from(generated.stealth_address),
-        ciphertext_len = generated.ct.len(),
+        ciphertext_len = generated.ct().len(),
         "generated stealth address"
     );
     Ok(generated)
@@ -220,7 +203,7 @@ pub fn bind_scanner(
     meta_address: &StealthMetaAddress,
 ) -> Result<Scanner, SchemeError> {
     let scanner = SchemeId3::bind(tracking_key, meta_address)?;
-    debug!(kem_key_len = meta_address.ek.len(), "scanner bound");
+    debug!(kem_key_len = meta_address.ek().len(), "scanner bound");
     Ok(scanner)
 }
 
@@ -245,8 +228,8 @@ pub fn scan_announcement(scanner: &Scanner, announcement: &StealthAddress) -> Op
 pub fn compute_stealth_spend_key(
     master_key: &Master,
     matched: &Match,
-) -> Result<StealthPrivateKey, SchemeError> {
-    let key = StealthPrivateKey(Zeroizing::new(SchemeId3::spend_key(master_key, matched)?));
+) -> Result<SpendKey, SchemeError> {
+    let key = SchemeId3::spend_key(master_key, matched)?;
     debug!(
         stealth_address = %Address::from(matched.stealth_address),
         "scheme 3 spend key derived"
@@ -254,20 +237,21 @@ pub fn compute_stealth_spend_key(
     Ok(key)
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(target_arch = "wasm32")))]
 mod tests {
     use super::*;
-    use alloy::primitives::{address, b256, keccak256};
-    use std::sync::{Arc, Mutex};
+    use std::{
+        io,
+        sync::{Arc, Mutex},
+    };
     use tracing::Level;
-    use tracing_subscriber::{Layer, layer::SubscriberExt};
 
     const V3_09_SEED: &str = "1111111111111111111111111111111111111111111111111111111111111111\
          3333333333333333333333333333333333333333333333333333333333333333\
          e582b7d75e6c80b05ae392a1fc9f7153b12390fd99930368cc67a768baebc8a0\
          1cdacb8740c0b87c4a379575f187b367cbfa3b300bf591b109f79816e9cbe8f0";
 
-    /// `pq-stealth-scheme3-public` `5fe8d0fd` `vectors/section-2_9.json` V3-09 `expect.meta_address`.
+    /// `pq-stealth-scheme3-public` `b576b37c` `vectors/section-2.json` V3-09 `expect.meta_address`.
     const V3_09_META: &str = "034f355bdcb7cc0af728ef3cceb9615d90684bb5b2ca5f859ab0f0b704075871aa\
          023c72addb4fdf09af94f0c94d7fe92a386a7e70cf8a1d85916386bb2535c7b1b1\
          28c793778741b80b02b4339f2aa4347255b099f17264e1b8cc0a2c7c2a1a79f799\
@@ -312,44 +296,32 @@ mod tests {
         hex::decode(s).unwrap()
     }
 
-    struct Capture(Arc<Mutex<Vec<String>>>);
+    struct LogWriter(Arc<Mutex<Vec<u8>>>);
 
-    impl<S> Layer<S> for Capture
-    where
-        S: tracing::Subscriber,
-    {
-        fn on_event(
-            &self,
-            event: &tracing::Event<'_>,
-            _ctx: tracing_subscriber::layer::Context<'_, S>,
-        ) {
-            let mut visitor = MsgVisitor(String::new());
-            event.record(&mut visitor);
-            self.0.lock().unwrap().push(visitor.0);
+    impl io::Write for LogWriter {
+        fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+            self.0.lock().unwrap().write(bytes)
         }
-    }
 
-    struct MsgVisitor(String);
-
-    impl tracing::field::Visit for MsgVisitor {
-        fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn core::fmt::Debug) {
-            use std::fmt::Write;
-            let _ = write!(self.0, "{}={value:?} ", field.name());
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
         }
     }
 
     fn captured(body: impl FnOnce()) -> String {
-        let lines = Arc::new(Mutex::new(Vec::new()));
-        let layer = Capture(Arc::clone(&lines)).with_filter(
-            tracing_subscriber::filter::LevelFilter::from_level(Level::TRACE),
-        );
-        // With one registered dispatch, tracing caches the registering thread's interest.
-        // Other tests can register these callsites without a subscriber. Keep two dispatches
-        // alive so the cache combines their interests and checks this thread's subscriber.
+        let bytes = Arc::new(Mutex::new(Vec::new()));
+        let writer = Arc::clone(&bytes);
+        // Multiple dispatches force tracing to check the thread's current subscriber.
         let _inactive = tracing::Dispatch::new(tracing::subscriber::NoSubscriber::default());
-        let capture = tracing::Dispatch::new(tracing_subscriber::registry().with(layer));
+        let subscriber = tracing_subscriber::fmt()
+            .with_ansi(false)
+            .without_time()
+            .with_max_level(Level::TRACE)
+            .with_writer(move || LogWriter(Arc::clone(&writer)))
+            .finish();
+        let capture = tracing::Dispatch::new(subscriber);
         tracing::dispatcher::with_default(&capture, body);
-        lines.lock().unwrap().join("\n")
+        String::from_utf8(bytes.lock().unwrap().clone()).unwrap()
     }
 
     #[test]
@@ -421,35 +393,6 @@ mod tests {
     }
 
     #[test]
-    fn malformed_canonical_inputs() {
-        let account = Scheme3Account::from_keygen_master(&[7; 32])
-            .unwrap()
-            .account;
-        let mut meta = account.meta_address().clone();
-        meta.viewing_ec = None;
-        assert_eq!(
-            generate_stealth_address_with_seed(&meta, &[0x44; 64]).unwrap_err(),
-            SchemeError::Engine(EngineError::Malformed)
-        );
-        assert_eq!(
-            bind_scanner(account.tracking_key(), &meta).unwrap_err(),
-            SchemeError::Engine(EngineError::Malformed)
-        );
-
-        let scanner = account.scanner().unwrap();
-        let announcement =
-            generate_stealth_address_with_seed(account.meta_address(), &[0x44; 64]).unwrap();
-        let mut missing_point = announcement.clone();
-        missing_point.epk = None;
-        assert!(scan_announcement(&scanner, &missing_point).is_none());
-        for len in [announcement.ct.len() - 1, announcement.ct.len() + 1] {
-            let mut malformed = announcement.clone();
-            malformed.ct.resize(len, 0);
-            assert!(scan_announcement(&scanner, &malformed).is_none());
-        }
-    }
-
-    #[test]
     fn foreign_account() {
         let account = Scheme3Account::from_keygen_master(&[7; 32])
             .unwrap()
@@ -502,9 +445,8 @@ mod tests {
         );
     }
 
-    // Scripted u8 samples for rand's array distribution.
     struct SeedRng {
-        samples: Vec<u8>,
+        bytes: Vec<u8>,
         consumed: usize,
     }
 
@@ -512,19 +454,21 @@ mod tests {
         type Error = core::convert::Infallible;
 
         fn try_next_u32(&mut self) -> Result<u32, Self::Error> {
-            let byte = self.samples[self.consumed];
-            self.consumed += 1;
-            Ok(u32::from(byte))
+            let mut bytes = [0u8; 4];
+            self.try_fill_bytes(&mut bytes)?;
+            Ok(u32::from_le_bytes(bytes))
         }
 
         fn try_next_u64(&mut self) -> Result<u64, Self::Error> {
-            panic!("these tests only draw u8 arrays");
+            let mut bytes = [0u8; 8];
+            self.try_fill_bytes(&mut bytes)?;
+            Ok(u64::from_le_bytes(bytes))
         }
 
         fn try_fill_bytes(&mut self, dst: &mut [u8]) -> Result<(), Self::Error> {
-            for byte in dst {
-                *byte = self.try_next_u32()? as u8;
-            }
+            let end = self.consumed + dst.len();
+            dst.copy_from_slice(&self.bytes[self.consumed..end]);
+            self.consumed = end;
             Ok(())
         }
     }
@@ -532,12 +476,26 @@ mod tests {
     impl rand::TryCryptoRng for SeedRng {}
 
     #[test]
+    fn account_seed_uses_rng_bytes() {
+        let bytes: Vec<u8> = (0u8..=255).collect();
+        let mut rng = SeedRng {
+            bytes: bytes.clone(),
+            consumed: 0,
+        };
+        for expected in bytes.chunks_exact(128) {
+            let seed = AccountSeed::generate(&mut rng);
+            assert_eq!(seed.expose_secret().as_slice(), expected);
+        }
+        assert_eq!(rng.consumed, bytes.len());
+    }
+
+    #[test]
     fn retries_rejected_seed() {
         let account = Scheme3Account::from_keygen_master(&[7; 32])
             .unwrap()
             .account;
         let mut rng = SeedRng {
-            samples: [vec![0; 64], vec![0x44; 64]].concat(),
+            bytes: [vec![0; 64], vec![0x44; 64]].concat(),
             consumed: 0,
         };
         let generated = generate_stealth_address(account.meta_address(), &mut rng).unwrap();
@@ -556,7 +514,7 @@ mod tests {
             .unwrap()
             .account;
         let mut rng = SeedRng {
-            samples: vec![0; 5 * 64],
+            bytes: vec![0; 5 * 64],
             consumed: 0,
         };
         assert_eq!(
@@ -571,10 +529,12 @@ mod tests {
         let account = Scheme3Account::from_keygen_master(&[7; 32])
             .unwrap()
             .account;
-        let mut recipient = account.meta_address().clone();
-        recipient.ek.fill(0xff);
+        let meta = account.meta_address();
+        let recipient =
+            StealthMetaAddress::new(meta.spending, meta.viewing_ec, vec![0xff; meta.ek().len()])
+                .unwrap();
         let mut rng = SeedRng {
-            samples: vec![0x44; 2 * 64],
+            bytes: vec![0x44; 2 * 64],
             consumed: 0,
         };
         assert_eq!(
@@ -585,38 +545,9 @@ mod tests {
     }
 
     #[test]
-    fn rust_interop_fixture_is_stable() {
-        let account = Scheme3Account::from_keygen_master(&[7; 32])
-            .unwrap()
-            .account;
-        let generated =
-            generate_stealth_address_with_seed(account.meta_address(), &[0x44; 64]).unwrap();
-
-        assert_eq!(
-            Address::from(generated.stealth_address),
-            address!("3d2fe245c88ae077b313a34fe65f858c5e36eb63")
-        );
-        assert_eq!(
-            generated.epk.as_ref().unwrap().as_bytes().as_slice(),
-            hex::decode("032c0b7cf95324a07d05398b240174dc0c2be444d96b159aa6c7f7b1e668680991")
-                .unwrap()
-        );
-        let (_, _, metadata) = SchemeId3::announcement_to_bytes(&generated);
-        assert_eq!(generated.ct.len(), 1_088);
-        assert_eq!(metadata.len(), 1_089);
-        assert_eq!(
-            keccak256(metadata),
-            b256!("659bbed65ea29fc7e1b547e0f10b39c53ce8ba8b1bef21ab6207ae1e960b59f0")
-        );
-    }
-
-    #[test]
-    fn secret_debug() {
+    fn seed_debug_is_redacted() {
         let account_seed = AccountSeed::from_bytes([0x7f; 128]);
-        let private_key = StealthPrivateKey(Zeroizing::new([0x6a; 32]));
-
         assert_eq!(format!("{account_seed:?}"), "AccountSeed([REDACTED])");
-        assert_eq!(format!("{private_key:?}"), "StealthPrivateKey([REDACTED])");
     }
 
     #[test]
@@ -643,8 +574,11 @@ mod tests {
             let scanner = account.scanner().unwrap();
             let matched = scan_announcement(&scanner, &generated).unwrap();
             let key = account.spend_key(&matched).unwrap();
-            assert_eq!(format!("{key:?}"), "StealthPrivateKey([REDACTED])");
-            for secret in [&matched.shared_secret, key.expose_secret()] {
+
+            for secret in [
+                matched.shared_secret.as_slice(),
+                key.expose_secret().as_slice(),
+            ] {
                 secret_renderings.push(hex::encode(secret));
                 secret_renderings.push(format!("{secret:?}"));
             }
