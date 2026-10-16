@@ -1,0 +1,20 @@
+[package]
+name = "kohaku-rpc-provider"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+alloy = { workspace = true, features = ["network", "providers", "rpc-types", "transports"] }
+futures = { workspace = true }
+tokio = { workspace = true, features = ["time"] }
+tracing = { workspace = true }
+
+[dev-dependencies]
+alloy = { workspace = true, features = ["json-rpc"] }
+tokio = { workspace = true, features = ["macros", "rt", "test-util"] }
+
+[lints]
+workspace = true

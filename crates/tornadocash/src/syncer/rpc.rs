@@ -1,7 +1,5 @@
-use std::time::Duration;
-
 use alloy::{providers::Provider, rpc::types::Filter};
-use tokio::time::sleep;
+use kohaku_rpc_provider::{StreamedEvent, StreamedEventConfig};
 use tracing::{info, warn};
 
 use crate::{
@@ -13,8 +11,7 @@ use crate::{
 #[derive(Clone)]
 pub struct RpcSyncer<P: Provider> {
     provider: P,
-    batch_size: u64,
-    batch_delay: Duration,
+    config: StreamedEventConfig,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -31,29 +28,21 @@ impl<P: Provider> RpcSyncer<P> {
     pub fn new(provider: P) -> Self {
         Self {
             provider,
-            batch_size: 10,
-            batch_delay: Duration::from_millis(1000),
+            config: StreamedEventConfig::default(),
         }
     }
 
+    /// Sets the chunking, concurrency and backoff options for `eth_getLogs` calls.
     #[must_use]
-    /// Sets the batch size for `eth_getLogs` calls.
-    pub fn with_batch_size(mut self, batch_size: u64) -> Self {
-        self.batch_size = batch_size;
-        self
-    }
-
-    #[must_use]
-    /// Sets the delay between `eth_getLogs` calls.
-    pub fn with_batch_delay(mut self, batch_delay: Duration) -> Self {
-        self.batch_delay = batch_delay;
+    pub fn with_config(mut self, config: StreamedEventConfig) -> Self {
+        self.config = config;
         self
     }
 }
 
 #[cfg_attr(native, async_trait::async_trait)]
 #[cfg_attr(wasm, async_trait::async_trait(?Send))]
-impl<P: Provider> Syncer for RpcSyncer<P> {
+impl<P: Provider + Clone> Syncer for RpcSyncer<P> {
     async fn sync_range(
         &self,
         pool: &Pool,
@@ -67,7 +56,7 @@ impl<P: Provider> Syncer for RpcSyncer<P> {
     }
 }
 
-impl<P: Provider> RpcSyncer<P> {
+impl<P: Provider + Clone> RpcSyncer<P> {
     async fn sync(
         &self,
         pool: &Pool,
@@ -77,35 +66,31 @@ impl<P: Provider> RpcSyncer<P> {
         let range = self.block_range(pool, from_block, to_block).await?;
         info!("Syncing from {} to {}", range.start, range.end);
 
-        let batch_size = self.batch_size.max(1);
-        let mut events = Vec::new();
-        let mut current = range.start;
-
-        while current < range.end {
-            //? `eth_getLogs` treats both block bounds as inclusive
-            let batch_end = current.saturating_add(batch_size).min(range.end) - 1;
-
-            let filter = Filter::new()
-                .address(pool.address)
-                .from_block(current)
-                .to_block(batch_end);
-
-            let logs = self.provider.get_logs(&filter).await?;
-            sleep(self.batch_delay).await;
-
-            for log in logs {
-                match SyncEvent::try_from_log(&log) {
-                    Some(decoded) => events.push(decoded),
-                    None => {
-                        warn!("Unknown event with topic {:?}", log.topic0());
-                    }
-                }
-            }
-
-            current = batch_end + 1;
-            info!("{}/{} ({} events)", current, range.end, events.len());
+        if range.is_empty() {
+            return Ok(Snapshot::new(pool.clone(), range, Vec::new()));
         }
 
+        //? `eth_getLogs` treats both block bounds as inclusive
+        let filter = Filter::new()
+            .address(pool.address)
+            .from_block(range.start)
+            .to_block(range.end - 1);
+        let logs = StreamedEvent::new(self.provider.clone(), filter)
+            .config(self.config)
+            .query()
+            .await?;
+
+        let mut events = Vec::new();
+        for log in logs {
+            match SyncEvent::try_from_log(&log) {
+                Some(decoded) => events.push(decoded),
+                None => {
+                    warn!("Unknown event with topic {:?}", log.topic0());
+                }
+            }
+        }
+
+        info!("Synced {} events", events.len());
         Ok(Snapshot::new(pool.clone(), range, events))
     }
 

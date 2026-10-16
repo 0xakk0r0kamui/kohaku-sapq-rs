@@ -4552,6 +4552,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "kohaku-rpc-provider"
+version = "0.1.0"
+dependencies = [
+ "alloy",
+ "futures",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "kohaku-tor-rpc"
 version = "0.1.0"
 dependencies = [
@@ -4583,6 +4593,7 @@ dependencies = [
  "insta",
  "kohaku-fork-kit",
  "kohaku-merkle-tree",
+ "kohaku-rpc-provider",
  "kohaku-tornadocash-circuit",
  "kohaku-userop-kit",
  "num-bigint 0.5.1",
