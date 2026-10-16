@@ -1,6 +1,6 @@
 use std::time::{Duration, Instant};
 
-use alloy::primitives::B256;
+use alloy::{primitives::B256, rpc::types::state::StateOverride};
 use reqwest::Url;
 use serde::Deserialize;
 use tokio::time::sleep;
@@ -70,17 +70,24 @@ impl Bundler for PimlicoBundler {
     async fn estimate_gas(
         &self,
         op: &SignableUserOperation,
+        state_override: Option<&StateOverride>,
     ) -> Result<UserOperationGasEstimate, BundlerError> {
         info!("Requesting gas estimate from Pimlico...");
+
+        //? The state override is an optional trailing param, so omit it rather
+        //? than sending `null`.
+        let params = match state_override {
+            Some(state_override) => {
+                serde_json::json!([&op.user_op, op.entry_point, state_override])
+            }
+            None => serde_json::json!([&op.user_op, op.entry_point]),
+        };
 
         let (estimate, price): (
             PimlicoUserOperationGasEstimate,
             PimlicoUserOperationGasPrice,
         ) = futures::try_join!(
-            self.client.request(
-                "eth_estimateUserOperationGas",
-                (&op.user_op, op.entry_point),
-            ),
+            self.client.request("eth_estimateUserOperationGas", params),
             self.client
                 .request("pimlico_getUserOperationGasPrice", serde_json::json!([]))
         )
