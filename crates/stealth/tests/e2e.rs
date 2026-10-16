@@ -1,3 +1,5 @@
+#![cfg(not(target_arch = "wasm32"))]
+
 use alloy::{
     network::TransactionBuilder,
     node_bindings::Anvil,
@@ -10,8 +12,8 @@ use alloy::{
 };
 use futures::{TryStreamExt, pin_mut, stream};
 use kohaku_stealth::{
-    AccountSeed, Deployment, FetchConfig, FetchError, FetchEvent, SCHEME_ID, ScanEvent,
-    Scheme3Account, SchemeError,
+    AccountSeed, Deployment, ExposeSecret, FetchConfig, FetchError, FetchEvent, SCHEME_ID,
+    ScanEvent, Scheme3Account, SchemeError,
     contracts::{
         IERC5564Announcer, IERC6538Registry, prepare_announcement, prepare_registration,
         prepare_registration_on_behalf, resolve_meta_address,
@@ -86,7 +88,7 @@ async fn receive_and_spend() -> anyhow::Result<()> {
     );
 
     let registration_receipt = recipient_provider
-        .send_transaction(prepare_registration(&deployment, account.meta_address())?)
+        .send_transaction(prepare_registration(&deployment, account.meta_address()))
         .await?
         .get_receipt()
         .await?;
@@ -100,7 +102,7 @@ async fn receive_and_spend() -> anyhow::Result<()> {
         fixture.meta_address.as_ref()
     );
 
-    let seed = SenderState::resume([0x5a; 32], 0)
+    let seed = SenderState::resume(&[0x5a; 32], 0)
         .draw_seed::<SchemeId3>()
         .map_err(SchemeError::from)?;
     let announcement = generate_stealth_address_with_seed(&registered, &seed)?;
@@ -110,7 +112,7 @@ async fn receive_and_spend() -> anyhow::Result<()> {
         SchemeId3::announcement_to_bytes(&published)
     );
     let announcement_receipt = provider
-        .send_transaction(prepare_announcement(&deployment, &announcement)?)
+        .send_transaction(prepare_announcement(&deployment, &announcement))
         .await?
         .get_receipt()
         .await?;
@@ -131,10 +133,10 @@ async fn receive_and_spend() -> anyhow::Result<()> {
 
     let mut rng = StdRng::from_seed([0x52; 32]);
     let other_seed = AccountSeed::generate(&mut rng);
-    let other_account = Scheme3Account::from_seed(other_seed.as_ref())?;
+    let other_account = Scheme3Account::from_seed(other_seed.expose_secret())?;
     let other_announcement = generate_stealth_address(other_account.meta_address(), &mut rng)?;
     let foreign_receipt = provider
-        .send_transaction(prepare_announcement(&deployment, &other_announcement)?)
+        .send_transaction(prepare_announcement(&deployment, &other_announcement))
         .await?
         .get_receipt()
         .await?;
@@ -150,7 +152,7 @@ async fn receive_and_spend() -> anyhow::Result<()> {
         let call = IERC5564Announcer::announceCall {
             schemeId: U256::from(scheme_id),
             stealthAddress: fixture.stealth_address,
-            ephemeralPubKey: fixture.epk_field.clone(),
+            ephemeralPubKey: fixture.ephemeral_pub_key.clone(),
             metadata: metadata.into(),
         };
         let receipt = provider
@@ -167,7 +169,7 @@ async fn receive_and_spend() -> anyhow::Result<()> {
 
     let unfunded_announcement = generate_stealth_address(&registered, &mut rng)?;
     let unfunded_receipt = provider
-        .send_transaction(prepare_announcement(&deployment, &unfunded_announcement)?)
+        .send_transaction(prepare_announcement(&deployment, &unfunded_announcement))
         .await?
         .get_receipt()
         .await?;
@@ -316,7 +318,7 @@ async fn registration_on_behalf() -> anyhow::Result<()> {
         registrant.address(),
         &signature.as_bytes(),
         &meta_address,
-    )?;
+    );
     let receipt = provider
         .send_transaction(transaction.clone())
         .await?

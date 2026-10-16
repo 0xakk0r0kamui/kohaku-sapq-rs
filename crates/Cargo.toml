@@ -43,14 +43,14 @@ kohaku-userop-kit = { path = "userop-kit" }
 num-bigint = "0.5.1"
 num-traits = "0.2.19"
 postcard = "1.1.3"
-pqsa-core = { git = "https://github.com/namnc/pq-stealth-scheme3-public.git", rev = "5fe8d0fd928155a56c74810ad9026807e548818b" }
-pqsa-kem = { git = "https://github.com/namnc/pq-stealth-scheme3-public.git", rev = "5fe8d0fd928155a56c74810ad9026807e548818b" }
-pqsa-per-payment = { git = "https://github.com/namnc/pq-stealth-scheme3-public.git", rev = "5fe8d0fd928155a56c74810ad9026807e548818b" }
+pqsa-core = { git = "https://github.com/namnc/pq-stealth-scheme3-public.git", rev = "b576b37cbd80db51c343b85d5fdad599b298047d" }
+pqsa-per-payment = { git = "https://github.com/namnc/pq-stealth-scheme3-public.git", rev = "b576b37cbd80db51c343b85d5fdad599b298047d" }
 rand = "0.10.2"
 rayon = "1.12"
 redb = "4.3.0"
 reqwest = "0.13.4"
 ruint = "1.20.0"
+secrecy = "0.10.3"
 serde = "1.0.229"
 serde_json = "1.0.151"
 sha2 = "0.10.9"

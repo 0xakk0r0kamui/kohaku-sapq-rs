@@ -8,8 +8,8 @@ pub mod syncer;
 pub use contracts::Deployment;
 pub use scan::{MatchedStealthAddress, ScanEvent, get_announcements_for_user, scan_record};
 pub use scheme3::{
-    AccountSeed, DerivedScheme3Account, EngineError, Master, Match, SCHEME_ID, Scanner,
-    Scheme3Account, SchemeError, StealthAddress, StealthMetaAddress, StealthPrivateKey, Tracking,
+    AccountSeed, DerivedScheme3Account, EngineError, ExposeSecret, Master, Match, SCHEME_ID,
+    Scanner, Scheme3Account, SchemeError, SpendKey, StealthAddress, StealthMetaAddress, Tracking,
     compute_stealth_spend_key, generate_stealth_address, generate_stealth_address_with_seed,
     scan_announcement,
 };

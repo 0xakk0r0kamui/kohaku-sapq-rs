@@ -18,9 +18,9 @@ alloy = { workspace = true, features = [
 ] }
 futures = { workspace = true }
 pqsa-core = { workspace = true }
-pqsa-kem = { workspace = true }
 pqsa-per-payment = { workspace = true }
 rand = { workspace = true }
+secrecy = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 zeroize = { workspace = true }
@@ -30,19 +30,24 @@ getrandom_02 = { version = "0.2", package = "getrandom", features = ["js"] }
 getrandom_04 = { version = "0.4", package = "getrandom", features = ["wasm_js"] }
 
 [dev-dependencies]
-async-trait = { workspace = true }
 alloy = { workspace = true, features = [
     "json-rpc",
-    "provider-anvil-node",
     "signer-local",
     "signers",
 ] }
-anyhow = { workspace = true }
-hex = { workspace = true }
 serde_json = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+async-trait = { workspace = true }
+alloy = { workspace = true, features = ["provider-anvil-node"] }
+anyhow = { workspace = true }
+hex = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+wasm-bindgen-test = { workspace = true }
 
 [lints]
 workspace = true
