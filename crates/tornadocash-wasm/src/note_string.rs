@@ -1,13 +1,15 @@
-use crate::{hex::Hex, note::Note};
 use kohaku_tornadocash::NoteString as CoreNoteString;
 use tsify::{Ts, Tsify};
 use wasm_bindgen::prelude::*;
 
-/// A Tornado note with asset and chain metadata, supporting parsing and
-/// formatting in the standard tornado format.
+use crate::{hex::Hex, note::Note};
+
+/// A portable tornadocash deposit note.
+///
+/// See [`kohaku_tornadocash::NoteString`] for more details.
 #[wasm_bindgen]
 pub struct NoteString {
-    inner: CoreNoteString,
+    pub(crate) inner: CoreNoteString,
 }
 
 #[wasm_bindgen]
@@ -125,10 +127,11 @@ impl NoteString {
 
 #[cfg(all(test, target_arch = "wasm32"))]
 mod tests {
-    use super::{Note, NoteString};
     use kohaku_tornadocash::Note as CoreNote;
     use wasm_bindgen::JsValue;
     use wasm_bindgen_test::wasm_bindgen_test;
+
+    use super::{Note, NoteString};
 
     #[wasm_bindgen_test]
     fn rejects_chain_ids_outside_u64() {

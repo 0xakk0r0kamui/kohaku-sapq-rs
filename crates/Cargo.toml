@@ -19,6 +19,7 @@ result_large_err = { level = "allow" }
 
 [workspace.dependencies]
 alloy = "2.4.1"
+alloy-primitives = { version = "1.7", default-features = false }
 alloy-sol-types = "1.7"
 anyhow = "1.0.104"
 ark-bn254 = "0.6.0"
