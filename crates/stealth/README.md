@@ -1,72 +1,115 @@
 # kohaku-stealth
 
-Rust support for ERC-5564 scheme 3. Announcement generation uses the protocol engine from [`pq-stealth-scheme3-public`](https://github.com/namnc/pq-stealth-scheme3-public) at revision `5fe8d0fd`. 
+Rust SDK for the hybrid stealth address scheme proposed in
+[ERC-8441](https://github.com/ethereum/ERCs/pull/2059).
+Announcements use [ERC-5564](https://eips.ethereum.org/EIPS/eip-5564).
 
-[`@kohaku-eth/pq-stealth-scheme3`](https://github.com/0xakk0r0kamui/kohaku-sapq/tree/pqsa-scheme3/crates/pq-stealth-ts) is the Kohaku plugin for the same scheme. 
+## Announcements
 
-Pass a provider configured with a funded signer, the deployment for its chain, and the recipient's validated meta-address. `resolve_meta_address` can read the latter from the ERC-6538 registry.
+Get the recipient's meta-address directly or look it up with
+`contracts::resolve_meta_address`. An empty registry entry returns `Ok(None)`.
 
 ```rust,no_run
-use alloy::{
-    primitives::{Address, U256},
-    providers::{DynProvider, Provider},
+use alloy::{primitives::Address, rpc::types::TransactionRequest};
+use kohaku_stealth::{
+    Deployment, StealthMetaAddress, contracts::prepare_announcement, generate_stealth_address,
 };
-use kohaku_kv_store::Store;
-use kohaku_stealth::{Deployment, StealthMetaAddress, StealthProvider};
 
-async fn send_native_payment(
-    rpc: DynProvider,
-    deployment: Deployment,
+fn example(
+    deployment: &Deployment,
     recipient: &StealthMetaAddress,
-    amount: U256,
-) -> Result<Address, Box<dyn std::error::Error>> {
-    let provider = StealthProvider::rpc(&Store::create(), rpc.clone(), deployment);
+) -> Result<(Address, TransactionRequest), kohaku_stealth::SchemeError> {
     let mut rng = rand::rng();
-    let payment = provider
-        .payment(recipient)
-        .native(amount)
-        .prepare(&mut rng)?;
-
-    let announcement = rpc
-        .send_transaction(payment.announcement_transaction)
-        .await?
-        .get_receipt()
-        .await?;
-    if !announcement.status() {
-        return Err("announcement transaction reverted".into());
-    }
-
-    let funding = rpc
-        .send_transaction(payment.funding_transaction)
-        .await?
-        .get_receipt()
-        .await?;
-    if !funding.status() {
-        return Err("funding transaction reverted".into());
-    }
-
-    Ok(payment.stealth_address)
+    let generated = generate_stealth_address(recipient, &mut rng)?;
+    let address = Address::from(generated.stealth_address);
+    let transaction = prepare_announcement(deployment, &generated);
+    Ok((address, transaction))
 }
 ```
 
-`PreparedPayment` contains unsigned transactions. Wait for a successful announcement receipt before funding the address. If the announcement fails, do not send funds. If funding fails after a successful announcement, retry funding the same address; a new call to `prepare` generates a different payment. If a receipt request times out, check the transaction's chain status before retrying to avoid sending twice. Applications that require finality should wait for their chain's confirmation policy before funding.
+Submit the unsigned `transaction` with Alloy and confirm success before funding
+`address`. Retry failed funding to the same address. Save each transaction hash
+before waiting for a receipt; after a timeout, check its status before resending.
 
-Persist the recipient's `AccountSeed` in a wallet keystore before dropping it; the account can be reconstructed with `Scheme3Account::from_seed`. `PaymentBuilder::prepare` requires a `CryptoRng`. Deterministic vectors and applications with an external nonce protocol can use `scheme3::generate_stealth_address_with_seed`. An announcement seed must never be reused: reuse repeats the ephemeral key, and reuse for the same recipient also repeats the stealth address.
+## Scanning
 
-`StealthPrivateKey` erases its exported scalar on drop and redacts `Debug`. Call `expose_secret` only at the signer boundary.
+Create a scanner with `Scheme3Account::scanner`. For watch-only scanning, use
+`scheme3::bind_scanner` with the tracking key and meta-address.
 
-## Logging
+```rust,no_run
+use alloy::providers::Provider;
+use futures::{TryStreamExt, pin_mut};
+use kohaku_stealth::{
+    Deployment, FetchConfig, FetchError, ScanEvent, Scanner, get_announcements,
+    get_announcements_for_user,
+};
 
-```bash
-RUST_LOG=kohaku_stealth=debug cargo test -p kohaku-stealth -- --nocapture
+async fn receive(
+    provider: &impl Provider,
+    deployment: Deployment,
+    scanner: &Scanner,
+    from_block: u64,
+) -> Result<(), FetchError> {
+    let announcements = get_announcements(
+        provider, deployment, from_block..=u64::MAX, FetchConfig::default(),
+    );
+    let events = get_announcements_for_user(scanner, announcements);
+    pin_mut!(events);
+
+    while let Some(event) = events.try_next().await? {
+        match event {
+            ScanEvent::Match(matched) => {
+                println!("{} in {}", matched.stealth_address(), matched.record().transaction_hash());
+            }
+            ScanEvent::RangeScanned { range, rejected_logs } => {
+                println!("scanned {range:?}; rejected {rejected_logs} malformed payloads");
+            }
+        }
+    }
+    Ok(())
+}
 ```
+
+Matches identify announcements for the scanner; check funding separately.
+The stream scans through the finalized head read on the first poll. Start at the
+announcer's deployment block unless you know when the recipient's keys were first
+used. Payments can precede registration.
+
+Save matches before checkpointing a range at `RangeScanned`. On error or
+cancellation, replay the unfinished range and deduplicate by chain, announcer,
+block hash, and log index. See `FetchConfig` for batch size and concurrency
+settings.
+
+## Keys
+
+Store `AccountSeed` in a wallet keystore. Restore the account with
+`Scheme3Account::from_seed`, then derive a spend key from a matched address.
+With Alloy's `signer-local` feature:
+
+```rust,no_run
+use alloy::signers::local::PrivateKeySigner;
+use kohaku_stealth::{ExposeSecret, MatchedStealthAddress, Scheme3Account};
+
+fn example(
+    account: &Scheme3Account,
+    matched: &MatchedStealthAddress,
+) -> Result<PrivateKeySigner, Box<dyn std::error::Error>> {
+    let key = matched.spend_key(account)?;
+    let signer = PrivateKeySigner::from_slice(key.expose_secret())?;
+    Ok(signer)
+}
+```
+
+`AccountSeed` and `SpendKey` clear their buffers on drop. A signer may keep its
+own copy of the key.
+
+`generate_stealth_address_with_seed` takes a 64-byte seed. Reusing a seed repeats
+the ephemeral key and, for the same recipient, the stealth address. Use
+`generate_stealth_address` with an RNG for new payments.
 
 ## Tests
 
-```bash
-cargo fmt -p kohaku-stealth -- --check
-cargo clippy -p kohaku-stealth --all-targets -- -D warnings
-cargo test -p kohaku-stealth
-```
+See [tests/README.md][tests] for native and browser commands, fixture sources,
+and update instructions. Set `RUST_LOG=kohaku_stealth=debug` for SDK logs.
 
-The unit tests pin published vector V3-09 from the engine revision. The Anvil flow registers a meta-address, prepares and sends a payment, indexes announcement logs, scans a match, derives the one-time key, and spends from the resulting address.
+[tests]: https://github.com/0xakk0r0kamui/kohaku-sapq-rs/blob/master/crates/stealth/tests/README.md
