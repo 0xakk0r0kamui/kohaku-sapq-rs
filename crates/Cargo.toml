@@ -3,6 +3,7 @@ members = [
     "fork-kit",
     "merkle-tree",
     "stealth",
+    "tor-rpc",
     "tornadocash",
     "tornadocash-circuit",
     "tornadocash-keychain",
@@ -36,6 +37,7 @@ js-sys = "0.3.85"
 kohaku-fork-kit = { path = "fork-kit" }
 kohaku-merkle-tree = { path = "merkle-tree" }
 kohaku-stealth = { path = "stealth" }
+kohaku-tor-rpc = { path = "tor-rpc" }
 kohaku-tornadocash = { path = "tornadocash" }
 kohaku-tornadocash-circuit = { path = "tornadocash-circuit" }
 kohaku-tornadocash-keychain = { path = "tornadocash-keychain" }
