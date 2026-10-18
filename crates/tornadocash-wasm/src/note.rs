@@ -1,9 +1,12 @@
-use crate::hex::Hex;
 use kohaku_tornadocash::{Note as CoreNote, Nullifier, Secret};
 use tsify::{Ts, Tsify};
 use wasm_bindgen::prelude::*;
 
-/// A Tornado note stored in WASM memory until its JavaScript wrapper is freed.
+use crate::hex::Hex;
+
+/// A tornadocash deposit note.
+///
+/// See [`kohaku_tornadocash::Note`] for more details.
 #[wasm_bindgen]
 pub struct Note {
     pub(crate) inner: CoreNote,

@@ -1,3 +1,4 @@
+use alloy::rpc::types::state::StateOverride;
 use thiserror::Error;
 
 use crate::{
@@ -11,10 +12,13 @@ pub mod pimlico;
 mod rpc_client;
 
 pub trait BundlerExt: Sized {
-    /// Fetches a gas estimate from the provider for the current UserOp.
+    /// Estimates and sets the gas for this UserOperation.
+    ///
+    /// Simulates against `state_override` if provided.
     fn with_gas_estimate(
         self,
         bundler: &dyn Bundler,
+        state_override: Option<&StateOverride>,
     ) -> impl Future<Output = Result<Self, BundlerError>>;
 }
 
@@ -22,9 +26,13 @@ pub trait BundlerExt: Sized {
 #[cfg_attr(native, async_trait::async_trait)]
 #[cfg_attr(wasm, async_trait::async_trait(?Send))]
 pub trait Bundler {
+    /// Estimates gas for `op`.
+    ///
+    /// Simulates against `state_override` if provided.
     async fn estimate_gas(
         &self,
         op: &SignableUserOperation,
+        state_override: Option<&StateOverride>,
     ) -> Result<UserOperationGasEstimate, BundlerError>;
     async fn send_user_operation(
         &self,
@@ -45,9 +53,13 @@ pub enum BundlerError {
 }
 
 impl<S> BundlerExt for UserOperationBuilder<S> {
-    async fn with_gas_estimate(self, bundler: &dyn Bundler) -> Result<Self, BundlerError> {
+    async fn with_gas_estimate(
+        self,
+        bundler: &dyn Bundler,
+        state_override: Option<&StateOverride>,
+    ) -> Result<Self, BundlerError> {
         let op = self.build();
-        let est = bundler.estimate_gas(&op).await?;
+        let est = bundler.estimate_gas(&op, state_override).await?;
 
         Ok(self.with_gas(est))
     }

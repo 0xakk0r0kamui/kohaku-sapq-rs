@@ -1,3 +1,4 @@
+use alloy_primitives::Address;
 use kohaku_tornadocash::{Field, Nullifier, Secret};
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
@@ -23,6 +24,22 @@ impl Hex {
         let text = self.0.strip_prefix("0x").ok_or(HexError::MissingPrefix)?;
 
         Ok(hex::decode(text)?)
+    }
+}
+
+impl TryFrom<Hex> for Address {
+    type Error = HexError;
+
+    fn try_from(value: Hex) -> Result<Self, Self::Error> {
+        let bytes = value.to_bytes()?;
+        let bytes: [u8; 20] = bytes.as_slice().try_into()?;
+        Ok(Self::from(bytes))
+    }
+}
+
+impl From<Address> for Hex {
+    fn from(value: Address) -> Self {
+        Self(value.to_string())
     }
 }
 
@@ -70,7 +87,43 @@ impl From<Field> for Hex {
 
 #[cfg(test)]
 mod tests {
+    use alloy_primitives::Address;
+
     use super::{Hex, HexError};
+
+    #[test]
+    fn converts_address_and_hex_preserving_leading_zeros() {
+        let address = Address::with_last_byte(0xab);
+        let text = "0x00000000000000000000000000000000000000AB";
+
+        assert_eq!(Hex::from(address).0, text);
+        assert_eq!(Address::try_from(Hex(text.to_owned())).unwrap(), address);
+    }
+
+    #[test]
+    fn decodes_address_without_requiring_checksum() {
+        for text in [
+            "0x00000000000000000000000000000000000000ab",
+            "0x00000000000000000000000000000000000000aB",
+        ] {
+            assert_eq!(
+                Address::try_from(Hex(text.to_owned())).unwrap(),
+                Address::with_last_byte(0xab)
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_address_with_incorrect_byte_length() {
+        for length in [0, 19, 21] {
+            let value = Hex(format!("0x{}", "ab".repeat(length)));
+
+            assert!(matches!(
+                Address::try_from(value),
+                Err(HexError::InvalidLength(_))
+            ));
+        }
+    }
 
     #[test]
     fn converts_hex_and_bytes_preserving_leading_zeros() {
