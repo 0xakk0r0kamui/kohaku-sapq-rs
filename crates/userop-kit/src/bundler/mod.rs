@@ -38,6 +38,10 @@ pub trait Bundler {
         &self,
         op: &SignedUserOperation,
     ) -> Result<UserOperationHash, BundlerError>;
+    async fn receipt(
+        &self,
+        hash: UserOperationHash,
+    ) -> Result<Option<UserOperationReceipt>, BundlerError>;
     async fn wait_for_receipt(
         &self,
         hash: UserOperationHash,
