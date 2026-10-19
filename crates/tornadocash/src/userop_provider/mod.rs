@@ -85,16 +85,17 @@ pub trait UserOperationPaymasterExt: Sized {
     /// # Errors
     /// Returns an error if the pool has no paymaster, if the note cannot cover the operation's
     /// gas, or if proving, estimation, or the fee quote fails.
-    fn with_tornado_paymaster<R>(
+    fn with_tornado_paymaster<R, B>(
         self,
         withdrawal: Withdrawal,
         merkle_proof: &MerkleProof,
         provider: &impl Provider,
-        bundler: &dyn Bundler,
+        bundler: &B,
         rng: &mut R,
     ) -> impl std::future::Future<Output = Result<Self, TornadoPaymasterError>>
     where
-        R: rand::CryptoRng;
+        R: rand::CryptoRng,
+        B: Bundler + ?Sized;
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -117,16 +118,17 @@ pub enum TornadoPaymasterError {
 
 impl<S> UserOperationPaymasterExt for UserOperationBuilder<S> {
     #[tracing::instrument(skip_all)]
-    async fn with_tornado_paymaster<R>(
+    async fn with_tornado_paymaster<R, B>(
         self,
         withdrawal: Withdrawal,
         merkle_proof: &MerkleProof,
         provider: &impl Provider,
-        bundler: &dyn Bundler,
+        bundler: &B,
         rng: &mut R,
     ) -> Result<Self, TornadoPaymasterError>
     where
         R: rand::CryptoRng,
+        B: Bundler + ?Sized,
     {
         let pool = withdrawal.pool.clone();
         let denomination = U256::from(pool.amount_wei);
@@ -161,16 +163,17 @@ impl<S> UserOperationPaymasterExt for UserOperationBuilder<S> {
     }
 }
 
-async fn estimate_at_fee<S, R>(
+async fn estimate_at_fee<S, R, B>(
     builder: UserOperationBuilder<S>,
     withdrawal: Withdrawal,
     fee: U256,
     merkle_proof: &MerkleProof,
-    bundler: &dyn Bundler,
+    bundler: &B,
     rng: &mut R,
 ) -> Result<UserOperationBuilder<S>, TornadoPaymasterError>
 where
     R: rand::CryptoRng,
+    B: Bundler + ?Sized,
 {
     let pool = withdrawal.pool.clone();
     let info = pool

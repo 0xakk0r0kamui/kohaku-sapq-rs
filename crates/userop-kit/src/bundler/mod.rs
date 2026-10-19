@@ -15,9 +15,9 @@ pub trait BundlerExt: Sized {
     /// Estimates and sets the gas for this UserOperation.
     ///
     /// Simulates against `state_override` if provided.
-    fn with_gas_estimate(
+    fn with_gas_estimate<B: Bundler + ?Sized>(
         self,
-        bundler: &dyn Bundler,
+        bundler: &B,
         state_override: Option<&StateOverride>,
     ) -> impl Future<Output = Result<Self, BundlerError>>;
 }
@@ -57,9 +57,9 @@ pub enum BundlerError {
 }
 
 impl<S> BundlerExt for UserOperationBuilder<S> {
-    async fn with_gas_estimate(
+    async fn with_gas_estimate<B: Bundler + ?Sized>(
         self,
-        bundler: &dyn Bundler,
+        bundler: &B,
         state_override: Option<&StateOverride>,
     ) -> Result<Self, BundlerError> {
         let op = self.build();
