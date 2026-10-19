@@ -62,6 +62,15 @@ impl PimlicoBundler {
             timeout: Duration::from_secs(60),
         }
     }
+
+    /// `client` is the transport. Callers that share a proxy or timeout pass their own.
+    pub fn with_client(client: reqwest::Client, bundler_url: Url) -> Self {
+        Self {
+            client: RpcClient::with_client(client, bundler_url),
+            wait_interval: Duration::from_secs(6),
+            timeout: Duration::from_secs(60),
+        }
+    }
 }
 
 #[cfg_attr(native, async_trait::async_trait)]
