@@ -86,7 +86,10 @@ impl Pool {
         asset: Asset::ETH,
         amount_wei: 10_u128.pow(17),
         deployed_block: 9116966,
-        paymaster: None,
+        paymaster: Some(PaymasterInfo {
+            address: address!("0xe06CB96C57D2442f8F60F5017354BC08F7e91308"),
+            adapter: address!("0x4a3F73a23563bB467Aa034d0fAB61e7BcDf26161"),
+        }),
     };
 
     pub const ETHEREUM_ETHER_1: Pool = Pool {
@@ -95,7 +98,10 @@ impl Pool {
         asset: Asset::ETH,
         amount_wei: 10_u128.pow(18),
         deployed_block: 9_117_609,
-        paymaster: None,
+        paymaster: Some(PaymasterInfo {
+            address: address!("0xe06CB96C57D2442f8F60F5017354BC08F7e91308"),
+            adapter: address!("0xC086b50Dd859Bb15D553327178DEdbC347B5b905"),
+        }),
     };
 
     pub const ETHEREUM_ETHER_10: Pool = Pool {
@@ -104,7 +110,10 @@ impl Pool {
         asset: Asset::ETH,
         amount_wei: 10_u128.pow(19),
         deployed_block: 9_117_720,
-        paymaster: None,
+        paymaster: Some(PaymasterInfo {
+            address: address!("0xe06CB96C57D2442f8F60F5017354BC08F7e91308"),
+            adapter: address!("0x08d1103bff53CBdC9DB1e81B79475CEad2e35870"),
+        }),
     };
 
     pub const ETHEREUM_ETHER_100: Pool = Pool {
@@ -113,7 +122,10 @@ impl Pool {
         asset: Asset::ETH,
         amount_wei: 10_u128.pow(20),
         deployed_block: 9_161_895,
-        paymaster: None,
+        paymaster: Some(PaymasterInfo {
+            address: address!("0xe06CB96C57D2442f8F60F5017354BC08F7e91308"),
+            adapter: address!("0x3aF851f9BeEeE6E9fa06022f34Dc4C453D265aE5"),
+        }),
     };
 
     pub const ETHEREUM_DAI_100: Pool = Pool {
