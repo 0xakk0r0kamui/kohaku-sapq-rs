@@ -1,12 +1,15 @@
 //! Signature-based keychain built.
 //!
-//! Uses the schema `trunc31(keccak256(tag || chain_id_le || pool || rs))`, where `rs` is the
-//! signature's big-endian `r` and low-`s` (32 bytes each) and `v` is dropped. One signature derives
-//! a nullifier and secret for any pool, speeding up recovery.
+//! One EIP-712 signature per `(nonce, chain_id)` — the domain binds the chain, not a pool.
+//! `trunc31(keccak256(tag || pool || rs))` then mixes the pool in, where `rs` is the signature's
+//! big-endian `r` and low-`s` (32 bytes each) and `v` is dropped. Pools on the same chain share
+//! that signature, which speeds up recovery.
+
+use std::collections::{HashMap, HashSet};
 
 use alloy::{
     dyn_abi::Eip712Domain,
-    primitives::{B256, keccak256},
+    primitives::keccak256,
     signers::{Signature, Signer},
     sol_types::eip712_domain,
 };
@@ -41,25 +44,23 @@ pub enum KeychainError {
     Signer(#[from] alloy::signers::Error),
 }
 
-const DOMAIN: Eip712Domain = eip712_domain! {
-    name: "TornadoCash Keychain",
-    version: "1",
-    // keccak256(b"tornado")
-    salt: B256::new([
-        0xc1, 0x12, 0x37, 0xb9, 0x77, 0x41, 0x8c, 0x70,
-        0x5d, 0x2b, 0x06, 0xda, 0x70, 0x25, 0x66, 0xcb,
-        0xfa, 0xb6, 0xec, 0xe8, 0xe4, 0x13, 0x93, 0x95,
-        0xf0, 0x3c, 0x66, 0xa9, 0x18, 0x99, 0xaf, 0x6f
-    ]),
-};
+fn domain(chain_id: u64) -> Eip712Domain {
+    eip712_domain! {
+        name: "TornadoCash Keychain",
+        version: "1",
+        chain_id: chain_id,
+        salt: alloy::primitives::keccak256(b"tornado"),
+    }
+}
 
 impl<S: Signer + Send + Sync> Keychain<S> {
     pub fn new(signer: S) -> Self {
         Self { signer }
     }
 
-    /// Derives the commitment and nullifier hash for `nonce` in each of `pools` from a single
-    /// signature.
+    /// Derives the commitment and nullifier hash for `nonce` in each of `pools`.
+    ///
+    /// Pools that share a chain share one signature.
     ///
     /// The resulting Vector will match the order of the pools provided.
     pub async fn note_hashes(
@@ -89,18 +90,25 @@ impl<S: Signer + Send + Sync> Keychain<S> {
 
     /// Derives the `NoteStrings` on all pools for a given nonce.
     ///
-    /// The resulting Vector will match the order of the pools provided.
+    /// The resulting Vector will match the order of the pools provided. Pools on different chains
+    /// are signed separately, because `chain_id` is part of the EIP-712 domain.
     async fn notes(&self, nonce: u64, pools: &[Pool]) -> Result<Vec<NoteString>, KeychainError> {
-        let signature = self
-            .signer
-            .sign_typed_data(&sol::TornadoCashNote { nonce }, &DOMAIN)
-            .await?;
+        let mut signatures = HashMap::<u64, Signature>::new();
+        let chain_ids: HashSet<u64> = pools.iter().map(|p| p.chain_id).collect();
+        for chain_id in chain_ids {
+            let signature = self
+                .signer
+                .sign_typed_data(&sol::TornadoCashNote { nonce }, &domain(chain_id))
+                .await?;
+            signatures.insert(chain_id, signature);
+        }
 
         let notes = pools
             .iter()
             .map(|pool| {
-                let secret = secret_from_signature(pool, &signature);
-                let nullifier = nullifier_from_signature(pool, &signature);
+                let signature = &signatures[&pool.chain_id];
+                let secret = secret_from_signature(pool, signature);
+                let nullifier = nullifier_from_signature(pool, signature);
 
                 NoteString::from_pool(Note::new(nullifier, secret), pool)
             })
@@ -120,15 +128,7 @@ fn nullifier_from_signature(pool: &Pool, sig: &Signature) -> Nullifier {
 
 fn from_signature(domain: &[u8], pool: &Pool, sig: &Signature) -> [u8; 31] {
     let rs = canonical_rs(sig);
-    let bytes = keccak256(
-        [
-            domain,
-            pool.chain_id.to_le_bytes().as_slice(),
-            pool.address.as_slice(),
-            rs.as_slice(),
-        ]
-        .concat(),
-    );
+    let bytes = keccak256([domain, pool.address.as_slice(), rs.as_slice()].concat());
     let mut nullifier_bytes = [0u8; 31];
     nullifier_bytes.copy_from_slice(&bytes[..31]);
 
@@ -157,7 +157,7 @@ mod tests {
     #[test]
     fn note_salt_is_tornado() {
         let expected = keccak256(b"tornado");
-        assert_eq!(Some(expected), DOMAIN.salt);
+        assert_eq!(Some(expected), domain(1).salt);
     }
 
     #[tokio::test]
@@ -167,7 +167,7 @@ mod tests {
         let keychain = Keychain::new(signer);
 
         let note = keychain.note(0, &POOL).await.unwrap();
-        let expected = "tornado-eth-1-1-0x460376fbb463984c7f53fdf65e1fdfefb8c1e0c44267080b820f0a7f3201d43cc703aacb12abd45720811ec9ddd908726811be2edbb67581a95e7498493e";
+        let expected = "tornado-eth-1-1-0xd60c35760fb4cb9ab527bd2b5f282f8de1a2ac7637b6fe7bcdc2e8442f5b77840ddb1813887350cee60b87c60badde4254f5fda056eaf9e6ff7ea1523745";
         assert_eq!(expected, note.to_string());
     }
 
@@ -188,7 +188,7 @@ mod tests {
     async fn high_s_and_v_do_not_change_the_preimage() {
         let signer = LocalSigner::from_bytes(&U256::from(42).into()).unwrap();
         let signature = signer
-            .sign_typed_data(&sol::TornadoCashNote { nonce: 4 }, &DOMAIN)
+            .sign_typed_data(&sol::TornadoCashNote { nonce: 4 }, &domain(POOL.chain_id))
             .await
             .unwrap();
         let low = signature.normalized_s();
