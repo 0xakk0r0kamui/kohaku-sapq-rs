@@ -35,8 +35,12 @@ struct RpcError {
 
 impl RpcClient {
     pub fn new(url: reqwest::Url) -> Self {
+        Self::with_client(Client::new(), url)
+    }
+
+    pub fn with_client(client: Client, url: reqwest::Url) -> Self {
         Self {
-            client: Client::new(),
+            client,
             url,
             id: AtomicU64::new(1),
         }

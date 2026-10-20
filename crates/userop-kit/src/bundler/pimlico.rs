@@ -62,6 +62,15 @@ impl PimlicoBundler {
             timeout: Duration::from_secs(60),
         }
     }
+
+    /// `client` is the transport. Callers that share a proxy or timeout pass their own.
+    pub fn with_client(client: reqwest::Client, bundler_url: Url) -> Self {
+        Self {
+            client: RpcClient::with_client(client, bundler_url),
+            wait_interval: Duration::from_secs(6),
+            timeout: Duration::from_secs(60),
+        }
+    }
 }
 
 #[cfg_attr(native, async_trait::async_trait)]
@@ -118,6 +127,20 @@ impl Bundler for PimlicoBundler {
         Ok(UserOperationHash(hash))
     }
 
+    async fn receipt(
+        &self,
+        hash: UserOperationHash,
+    ) -> Result<Option<UserOperationReceipt>, BundlerError> {
+        info!("Requesting user operation receipt from Pimlico...");
+        let receipt: Option<UserOperationReceipt> = self
+            .client
+            .request("eth_getUserOperationReceipt", (hash.0,))
+            .await
+            .map_err(|e| BundlerError::Other(Box::new(e)))?;
+
+        Ok(receipt)
+    }
+
     async fn wait_for_receipt(
         &self,
         hash: UserOperationHash,
@@ -126,14 +149,8 @@ impl Bundler for PimlicoBundler {
 
         let start = Instant::now();
         while start.elapsed() < self.timeout {
-            let receipt: Option<UserOperationReceipt> = self
-                .client
-                .request("eth_getUserOperationReceipt", (hash.0,))
-                .await
-                .map_err(|e| BundlerError::Other(Box::new(e)))?;
-
-            if let Some(r) = receipt {
-                return Ok(r);
+            if let Some(receipt) = self.receipt(hash).await? {
+                return Ok(receipt);
             }
 
             info!("User operation not yet included, retrying...");

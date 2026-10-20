@@ -58,8 +58,16 @@ enum SagaSyncError {
 impl SagaSyncer {
     #[must_use]
     pub fn new(base_url: &str) -> Self {
+        Self::with_client(reqwest::Client::new(), base_url)
+    }
+
+    /// `client` is the HTTP client for the manifest and chunk fetches.
+    ///
+    /// A later caller can pass a client that uses a proxy without this syncer knowing why.
+    #[must_use]
+    pub fn with_client(client: reqwest::Client, base_url: &str) -> Self {
         Self {
-            client: reqwest::Client::new(),
+            client,
             base_url: base_url.trim_end_matches('/').to_string(),
         }
     }
