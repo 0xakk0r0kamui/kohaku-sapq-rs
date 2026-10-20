@@ -37,6 +37,7 @@ impl Pool {
         Pool::SEPOLIA_ETHER_01,
         Pool::SEPOLIA_ETHER_1,
         Pool::SEPOLIA_ETHER_10,
+        Pool::SEPOLIA_DAI_100,
         Pool::ETHEREUM_ETHER_01,
         Pool::ETHEREUM_ETHER_1,
         Pool::ETHEREUM_ETHER_10,
@@ -45,6 +46,15 @@ impl Pool {
         Pool::POLYGON_MATIC_1000,
         Pool::ETHEREUM_DAI_100,
         Pool::ETHEREUM_DAI_1000,
+        Pool::ETHEREUM_DAI_10000,
+        Pool::ETHEREUM_DAI_100000,
+        Pool::ETHEREUM_USDC_100,
+        Pool::ETHEREUM_USDC_1000,
+        Pool::ETHEREUM_USDT_100,
+        Pool::ETHEREUM_USDT_1000,
+        Pool::ETHEREUM_WBTC_01,
+        Pool::ETHEREUM_WBTC_1,
+        Pool::ETHEREUM_WBTC_10,
     ];
 
     pub const SEPOLIA_ETHER_01: Pool = Pool {
@@ -78,6 +88,18 @@ impl Pool {
         amount_wei: 10_u128.pow(19),
         deployed_block: 5_594_402,
         paymaster: None,
+    };
+
+    pub const SEPOLIA_DAI_100: Pool = Pool {
+        chain_id: 11155111,
+        address: address!("0x6921fd1a97441dd603a997ED6DDF388658daf754"),
+        asset: Asset::SEPOLIA_DAI,
+        amount_wei: 10_u128.pow(20),
+        deployed_block: 5_594_406,
+        paymaster: Some(PaymasterInfo {
+            address: address!("0x1c5aCCb9c09D72945b79EC986776136bE01d7B2F"),
+            adapter: address!("0xbF0a7969dacF8337716d0F283df0574dF56b0479"),
+        }),
     };
 
     pub const ETHEREUM_ETHER_01: Pool = Pool {
@@ -144,6 +166,114 @@ impl Pool {
         amount_wei: 10_u128.pow(21),
         deployed_block: 9_161_917,
         paymaster: None,
+    };
+
+    pub const ETHEREUM_DAI_10000: Pool = Pool {
+        chain_id: 1,
+        address: address!("0x07687e702b410Fa43f4cB4Af7FA097918ffD2730"),
+        asset: Asset::ETHEREUM_DAI,
+        amount_wei: 10_u128.pow(22),
+        deployed_block: 12_066_007,
+        paymaster: Some(PaymasterInfo {
+            address: address!("0xe06CB96C57D2442f8F60F5017354BC08F7e91308"),
+            adapter: address!("0x36A5b4bCE77700B9C52cFEE53Fc8cA3B58eb7E35"),
+        }),
+    };
+
+    pub const ETHEREUM_DAI_100000: Pool = Pool {
+        chain_id: 1,
+        address: address!("0x23773E65ed146A459791799d01336DB287f25334"),
+        asset: Asset::ETHEREUM_DAI,
+        amount_wei: 10_u128.pow(23),
+        deployed_block: 12_066_048,
+        paymaster: Some(PaymasterInfo {
+            address: address!("0xe06CB96C57D2442f8F60F5017354BC08F7e91308"),
+            adapter: address!("0x83Ff713F0939409E1c6023bc8aaB3E49eD968c8D"),
+        }),
+    };
+
+    pub const ETHEREUM_USDC_100: Pool = Pool {
+        chain_id: 1,
+        address: address!("0xd96f2B1c14Db8458374d9Aca76E26c3D18364307"),
+        asset: Asset::ETHEREUM_USDC,
+        amount_wei: 10_u128.pow(8),
+        deployed_block: 9_161_958,
+        paymaster: Some(PaymasterInfo {
+            address: address!("0xe06CB96C57D2442f8F60F5017354BC08F7e91308"),
+            adapter: address!("0x44336242f9766b4c751F6958499C5cc18325e25B"),
+        }),
+    };
+
+    pub const ETHEREUM_USDC_1000: Pool = Pool {
+        chain_id: 1,
+        address: address!("0x4736dCf1b7A3d580672CcE6E7c65cd5cc9cFBa9D"),
+        asset: Asset::ETHEREUM_USDC,
+        amount_wei: 10_u128.pow(9),
+        deployed_block: 9_161_965,
+        paymaster: Some(PaymasterInfo {
+            address: address!("0xe06CB96C57D2442f8F60F5017354BC08F7e91308"),
+            adapter: address!("0xB1C7e712AF153073979AdC5ef8B1Cc5A7b0cf031"),
+        }),
+    };
+
+    pub const ETHEREUM_USDT_100: Pool = Pool {
+        chain_id: 1,
+        address: address!("0x169AD27A470D064DEDE56a2D3ff727986b15D52B"),
+        asset: Asset::ETHEREUM_USDT,
+        amount_wei: 10_u128.pow(8),
+        deployed_block: 9_162_005,
+        paymaster: Some(PaymasterInfo {
+            address: address!("0xe06CB96C57D2442f8F60F5017354BC08F7e91308"),
+            adapter: address!("0xF006862cCa4829D3f3ddD52d93fC49C03D380a5F"),
+        }),
+    };
+
+    pub const ETHEREUM_USDT_1000: Pool = Pool {
+        chain_id: 1,
+        address: address!("0x0836222F2B2B24A3F36f98668Ed8F0B38D1a872f"),
+        asset: Asset::ETHEREUM_USDT,
+        amount_wei: 10_u128.pow(9),
+        deployed_block: 9_162_012,
+        paymaster: Some(PaymasterInfo {
+            address: address!("0xe06CB96C57D2442f8F60F5017354BC08F7e91308"),
+            adapter: address!("0x5DF524b6c9303eD94A7767c2eD787ee223c9bC54"),
+        }),
+    };
+
+    pub const ETHEREUM_WBTC_01: Pool = Pool {
+        chain_id: 1,
+        address: address!("0x178169B423a011fff22B9e3F3abeA13414dDD0F1"),
+        asset: Asset::ETHEREUM_WBTC,
+        amount_wei: 10_u128.pow(7),
+        deployed_block: 12_067_529,
+        paymaster: Some(PaymasterInfo {
+            address: address!("0xe06CB96C57D2442f8F60F5017354BC08F7e91308"),
+            adapter: address!("0x0fdF2f686B600523F9752aEca0abb6AD9603A22C"),
+        }),
+    };
+
+    pub const ETHEREUM_WBTC_1: Pool = Pool {
+        chain_id: 1,
+        address: address!("0x610B717796ad172B316836AC95a2ffad065CeaB4"),
+        asset: Asset::ETHEREUM_WBTC,
+        amount_wei: 10_u128.pow(8),
+        deployed_block: 12_066_652,
+        paymaster: Some(PaymasterInfo {
+            address: address!("0xe06CB96C57D2442f8F60F5017354BC08F7e91308"),
+            adapter: address!("0xec3Cca694EEe55808B3f5EFEDd0bC03E52e47834"),
+        }),
+    };
+
+    pub const ETHEREUM_WBTC_10: Pool = Pool {
+        chain_id: 1,
+        address: address!("0xbB93e510BbCD0B7beb5A853875f9eC60275CF498"),
+        asset: Asset::ETHEREUM_WBTC,
+        amount_wei: 10_u128.pow(9),
+        deployed_block: 12_067_591,
+        paymaster: Some(PaymasterInfo {
+            address: address!("0xe06CB96C57D2442f8F60F5017354BC08F7e91308"),
+            adapter: address!("0xC2C427E6ADF66F412921C17958CeDD9C7710F521"),
+        }),
     };
 
     pub const POLYGON_MATIC_100: Pool = Pool {
