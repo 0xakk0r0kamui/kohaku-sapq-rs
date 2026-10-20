@@ -1,3 +1,5 @@
+#![doc = include_str!("../README.md")]
+
 use std::array::from_fn;
 
 use crate::{element::Element, hasher::Hasher};
