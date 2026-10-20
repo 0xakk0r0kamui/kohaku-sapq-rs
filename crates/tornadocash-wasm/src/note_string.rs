@@ -2,7 +2,7 @@ use kohaku_tornadocash::NoteString as CoreNoteString;
 use tsify::{Ts, Tsify};
 use wasm_bindgen::prelude::*;
 
-use crate::{hex::Hex, note::Note};
+use crate::{bigint::JsU64, hex::Hex, note::Note};
 
 /// A portable tornadocash deposit note.
 ///
@@ -24,14 +24,8 @@ impl NoteString {
     ///
     /// Throws if the chain ID is outside the u64 range.
     #[wasm_bindgen(constructor)]
-    pub fn new(
-        note: Note,
-        symbol: &str,
-        amount: &str,
-        chain_id: js_sys::BigInt,
-    ) -> Result<Self, JsError> {
-        let chain_id = u64::try_from(chain_id)
-            .map_err(|_| JsError::new("chainId must be in the u64 range"))?;
+    pub fn new(note: Note, symbol: &str, amount: &str, chain_id: JsU64) -> Result<Self, JsError> {
+        let chain_id = u64::try_from(chain_id)?;
 
         Ok(Self {
             inner: CoreNoteString::new(note.inner, symbol, amount, chain_id),
@@ -128,22 +122,9 @@ impl NoteString {
 #[cfg(all(test, target_arch = "wasm32"))]
 mod tests {
     use kohaku_tornadocash::Note as CoreNote;
-    use wasm_bindgen::JsValue;
     use wasm_bindgen_test::wasm_bindgen_test;
 
     use super::{Note, NoteString};
-
-    #[wasm_bindgen_test]
-    fn rejects_chain_ids_outside_u64() {
-        for text in ["-1", "18446744073709551616"] {
-            let note = Note {
-                inner: CoreNote::new([0u8; 31], [0u8; 31]),
-            };
-            let chain_id = js_sys::BigInt::new(&JsValue::from_str(text)).unwrap();
-
-            assert!(NoteString::new(note, "eth", "0.1", chain_id).is_err());
-        }
-    }
 
     #[wasm_bindgen_test]
     fn accepts_chain_id_boundaries() {
@@ -151,8 +132,7 @@ mod tests {
             let note = Note {
                 inner: CoreNote::new([0u8; 31], [0u8; 31]),
             };
-            let note_string =
-                NoteString::new(note, "eth", "0.1", js_sys::BigInt::from(chain_id)).unwrap();
+            let note_string = NoteString::new(note, "eth", "0.1", chain_id.into()).unwrap();
 
             assert_eq!(note_string.chain_id(), chain_id);
         }

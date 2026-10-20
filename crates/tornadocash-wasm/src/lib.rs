@@ -1,6 +1,7 @@
 #![doc = include_str!("../README.md")]
 
 mod asset;
+mod bigint;
 mod hex;
 mod note;
 mod note_string;

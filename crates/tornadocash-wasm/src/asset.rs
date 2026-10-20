@@ -1,12 +1,12 @@
 use std::borrow::Cow;
 
-use alloy_primitives::Address;
+use alloy::primitives::Address;
 use kohaku_tornadocash::Asset as CoreAsset;
 use serde::{Deserialize, Serialize};
 use tsify::{Ts, Tsify};
 use wasm_bindgen::prelude::*;
 
-use crate::hex::Hex;
+use crate::{bigint::JsU8, hex::Hex};
 
 /// Represents an asset in a tornadocash pool.
 ///
@@ -31,14 +31,11 @@ impl Asset {
     /// # Errors
     ///
     /// Throws if decimals is not a finite integer JavaScript number in 0..=255.
-    pub fn native(
-        symbol: String,
-        #[wasm_bindgen(unchecked_param_type = "number")] decimals: &JsValue,
-    ) -> Result<Self, JsError> {
+    pub fn native(symbol: String, decimals: JsU8) -> Result<Self, JsError> {
         Ok(Self {
             inner: CoreAsset::Native {
                 symbol: Cow::Owned(symbol),
-                decimals: validate_decimals(decimals)?,
+                decimals: u8::try_from(decimals)?,
             },
         })
     }
@@ -49,18 +46,14 @@ impl Asset {
     ///
     /// Throws if the address cannot be decoded into 20 bytes or decimals is not a
     /// finite integer JavaScript number in 0..=255.
-    pub fn erc20(
-        address: &Ts<Hex>,
-        symbol: String,
-        #[wasm_bindgen(unchecked_param_type = "number")] decimals: &JsValue,
-    ) -> Result<Self, JsError> {
+    pub fn erc20(address: &Ts<Hex>, symbol: String, decimals: JsU8) -> Result<Self, JsError> {
         let address = Address::try_from(address.to_rust()?)?;
 
         Ok(Self {
             inner: CoreAsset::Erc20 {
                 address,
                 symbol: Cow::Owned(symbol),
-                decimals: validate_decimals(decimals)?,
+                decimals: u8::try_from(decimals)?,
             },
         })
     }
@@ -124,32 +117,21 @@ impl Asset {
     }
 }
 
-fn validate_decimals(value: &JsValue) -> Result<u8, JsError> {
-    let message = "Decimals must be a finite integer number in 0..=255";
-    let value = value.as_f64().ok_or_else(|| JsError::new(message))?;
-    if !value.is_finite() || value.fract() != 0.0 || !(0.0..=255.0).contains(&value) {
-        return Err(JsError::new(message));
-    }
-
-    #[allow(clippy::cast_sign_loss, reason = "validated as an integer in 0..=255")]
-    Ok(value as u8)
-}
-
 #[cfg(all(test, target_arch = "wasm32"))]
 mod tests {
     use std::borrow::Cow;
 
-    use alloy_primitives::Address;
+    use alloy::primitives::Address;
     use kohaku_tornadocash::Asset as CoreAsset;
     use tsify::Ts;
-    use wasm_bindgen::JsValue;
+    use wasm_bindgen::{JsCast, JsValue};
     use wasm_bindgen_test::wasm_bindgen_test;
 
     use super::Asset;
 
     #[wasm_bindgen_test]
     fn custom_native_maps_inputs_to_owned_core_asset() {
-        let asset = Asset::native(" XyZ ".to_owned(), &JsValue::from_f64(6.0)).unwrap();
+        let asset = Asset::native(" XyZ ".to_owned(), 6_u8.into()).unwrap();
 
         let CoreAsset::Native { symbol, decimals } = asset.inner else {
             panic!("expected native asset");
@@ -160,33 +142,11 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    fn custom_native_accepts_decimals_bounds() {
-        for expected in [0_u8, 255] {
-            let asset =
-                Asset::native("xyz".to_owned(), &JsValue::from_f64(f64::from(expected))).unwrap();
-
-            assert_eq!(asset.decimals(), expected);
-        }
-    }
-
-    #[wasm_bindgen_test]
-    fn custom_native_rejects_invalid_decimals() {
-        for value in [-1.0, 256.0, 6.5, f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
-            assert!(Asset::native("xyz".to_owned(), &JsValue::from_f64(value)).is_err());
-        }
-    }
-
-    #[wasm_bindgen_test]
-    fn custom_native_rejects_string_decimals() {
-        assert!(Asset::native("xyz".to_owned(), &JsValue::from_str("6")).is_err());
-    }
-
-    #[wasm_bindgen_test]
     fn custom_erc20_maps_inputs_to_owned_core_asset() {
         let address = Ts::new_unchecked(JsValue::from_str(
             "0x00000000000000000000000000000000000000AB",
         ));
-        let asset = Asset::erc20(&address, " Tkn ".to_owned(), &JsValue::from_f64(6.0)).unwrap();
+        let asset = Asset::erc20(&address, " Tkn ".to_owned(), 6_u8.into()).unwrap();
 
         let CoreAsset::Erc20 {
             symbol,
@@ -207,7 +167,7 @@ mod tests {
     fn custom_erc20_rejects_invalid_address_length() {
         let address = Ts::new_unchecked(JsValue::from_str("0x01"));
 
-        assert!(Asset::erc20(&address, "xyz".to_owned(), &JsValue::from_f64(6.0)).is_err());
+        assert!(Asset::erc20(&address, "xyz".to_owned(), 6_u8.into()).is_err());
     }
 
     #[wasm_bindgen_test]
@@ -216,7 +176,14 @@ mod tests {
             "0x00000000000000000000000000000000000000ab",
         ));
 
-        assert!(Asset::erc20(&address, "xyz".to_owned(), &JsValue::from_f64(6.5)).is_err());
+        assert!(
+            Asset::erc20(
+                &address,
+                "xyz".to_owned(),
+                JsValue::from_f64(6.5).unchecked_into()
+            )
+            .is_err()
+        );
     }
 
     #[wasm_bindgen_test]

@@ -1,4 +1,4 @@
-use alloy_primitives::Address;
+use alloy::primitives::{Address, B256};
 use kohaku_tornadocash::{Field, Nullifier, Secret};
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
@@ -17,6 +17,9 @@ pub enum HexError {
 
     #[error("Invalid byte length: {0}")]
     InvalidLength(#[from] std::array::TryFromSliceError),
+
+    #[error("Field not in range")]
+    InvalidField,
 }
 
 impl Hex {
@@ -85,11 +88,53 @@ impl From<Field> for Hex {
     }
 }
 
+impl TryFrom<Hex> for Field {
+    type Error = HexError;
+
+    fn try_from(value: Hex) -> Result<Self, Self::Error> {
+        let bytes = value.to_bytes()?;
+        let bytes: [u8; 32] = bytes.as_slice().try_into()?;
+        Self::try_from(B256::from(bytes)).map_err(|_| HexError::InvalidField)
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use alloy_primitives::Address;
+    use alloy::primitives::Address;
+    use kohaku_tornadocash::Field;
 
     use super::{Hex, HexError};
+
+    #[test]
+    fn converts_exact_length_hex_to_canonical_field() {
+        let value = Hex(format!("0x{}AB", "00".repeat(31)));
+        let field = Field::try_from(value).unwrap();
+
+        assert_eq!(field, Field::from(0xab_usize));
+        assert_eq!(Hex::from(field).0, format!("0x{}ab", "00".repeat(31)));
+    }
+
+    #[test]
+    fn rejects_field_with_incorrect_byte_length() {
+        for length in [0, 31, 33] {
+            let value = Hex(format!("0x{}", "00".repeat(length)));
+
+            assert!(matches!(
+                Field::try_from(value),
+                Err(HexError::InvalidLength(_))
+            ));
+        }
+    }
+
+    #[test]
+    fn rejects_field_out_of_core_range() {
+        let value = Hex::from([0xff; 32].as_slice());
+
+        assert!(matches!(
+            Field::try_from(value),
+            Err(HexError::InvalidField)
+        ));
+    }
 
     #[test]
     fn converts_address_and_hex_preserving_leading_zeros() {
