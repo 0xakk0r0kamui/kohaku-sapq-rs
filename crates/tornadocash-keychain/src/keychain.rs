@@ -1,8 +1,8 @@
 //! Signature-based keychain built.
 //!
-//! Uses the schema `nullifier = keccak256(b"nullifier" || pool.chain_id || pool.address ||
-//! sig(domain, nonce))`. This way a single signature can be used to derive a nullifier / secret for
-//! any pool, speeding up recovery.
+//! Uses the schema `trunc31(keccak256(tag || chain_id_le || pool || rs))`, where `rs` is the
+//! signature's big-endian `r` and low-`s` (32 bytes each) and `v` is dropped. One signature derives
+//! a nullifier and secret for any pool, speeding up recovery.
 
 use alloy::{
     dyn_abi::Eip712Domain,
@@ -119,12 +119,13 @@ fn nullifier_from_signature(pool: &Pool, sig: &Signature) -> Nullifier {
 }
 
 fn from_signature(domain: &[u8], pool: &Pool, sig: &Signature) -> [u8; 31] {
+    let rs = canonical_rs(sig);
     let bytes = keccak256(
         [
             domain,
             pool.chain_id.to_le_bytes().as_slice(),
             pool.address.as_slice(),
-            sig.as_bytes().as_slice(),
+            rs.as_slice(),
         ]
         .concat(),
     );
@@ -134,8 +135,19 @@ fn from_signature(domain: &[u8], pool: &Pool, sig: &Signature) -> [u8; 31] {
     nullifier_bytes
 }
 
+/// Big-endian `r ‖ low-s`. `v` is omitted so software and hardware signers agree.
+fn canonical_rs(sig: &Signature) -> [u8; 64] {
+    let sig = sig.normalized_s();
+    let mut rs = [0u8; 64];
+    rs[..32].copy_from_slice(&sig.r().to_be_bytes::<32>());
+    rs[32..].copy_from_slice(&sig.s().to_be_bytes::<32>());
+    rs
+}
+
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
+
     use alloy::{primitives::U256, signers::local::LocalSigner};
 
     use super::*;
@@ -155,7 +167,7 @@ mod tests {
         let keychain = Keychain::new(signer);
 
         let note = keychain.note(0, &POOL).await.unwrap();
-        let expected = "tornado-eth-1-1-0x6e7b680a434a94f58ab3191a2db353a8b7de420c5d99d411392f1fc8b91e00547f137f1bce7ee67a7a46c3d4e884cf71fcd50dc0e5f1f238ed3f94e8d335";
+        let expected = "tornado-eth-1-1-0x460376fbb463984c7f53fdf65e1fdfefb8c1e0c44267080b820f0a7f3201d43cc703aacb12abd45720811ec9ddd908726811be2edbb67581a95e7498493e";
         assert_eq!(expected, note.to_string());
     }
 
@@ -170,5 +182,27 @@ mod tests {
 
         assert_ne!(note1, note2);
         assert_ne!(note1, note3);
+    }
+
+    #[tokio::test]
+    async fn high_s_and_v_do_not_change_the_preimage() {
+        let signer = LocalSigner::from_bytes(&U256::from(42).into()).unwrap();
+        let signature = signer
+            .sign_typed_data(&sol::TornadoCashNote { nonce: 4 }, &DOMAIN)
+            .await
+            .unwrap();
+        let low = signature.normalized_s();
+        let order =
+            U256::from_str("0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141")
+                .unwrap();
+        let high = Signature::new(low.r(), order - low.s(), !low.v());
+        let flipped_v = Signature::new(low.r(), low.s(), !low.v());
+
+        assert_ne!(low.s(), high.s());
+        for tag in [b"secret".as_slice(), b"nullifier".as_slice()] {
+            let expected = from_signature(tag, &POOL, &low);
+            assert_eq!(expected, from_signature(tag, &POOL, &high));
+            assert_eq!(expected, from_signature(tag, &POOL, &flipped_v));
+        }
     }
 }
