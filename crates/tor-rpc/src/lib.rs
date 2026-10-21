@@ -145,7 +145,7 @@ impl TorRpc {
 
     /// HTTP over this Tor client, including status and headers.
     ///
-    /// The body is collected into [`Bytes`](Bytes). Non-2xx statuses are returned, not treated as
+    /// The body is collected into [`Bytes`]. Non-2xx statuses are returned, not treated as
     /// errors.
     ///
     /// # Errors

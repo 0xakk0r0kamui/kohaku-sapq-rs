@@ -4690,15 +4690,17 @@ dependencies = [
 name = "kohaku-tornadocash-wasm"
 version = "0.1.0"
 dependencies = [
- "alloy-primitives",
+ "alloy",
  "getrandom 0.4.3",
  "hex",
  "js-sys",
  "kohaku-tornadocash",
  "serde",
+ "serde_json",
  "thiserror 2.0.20",
  "tsify",
  "wasm-bindgen",
+ "wasm-bindgen-futures",
  "wasm-bindgen-test",
 ]
 

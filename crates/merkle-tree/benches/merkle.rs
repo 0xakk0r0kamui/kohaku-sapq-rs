@@ -37,7 +37,8 @@ fn bench_insert(c: &mut Criterion) {
         group.bench_function(BenchmarkId::from_parameter(n), |b| {
             b.iter(|| {
                 let mut tree = Tree::new();
-                tree.splice(black_box(0), black_box(&leaves)).expect("Failed to insert leaves");
+                tree.splice(black_box(0), black_box(&leaves))
+                    .expect("Failed to insert leaves");
             });
         });
     }

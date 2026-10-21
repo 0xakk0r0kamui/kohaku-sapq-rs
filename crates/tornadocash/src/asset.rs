@@ -41,6 +41,30 @@ impl Asset {
         decimals: 18,
     };
 
+    pub const ETHEREUM_USDC: Asset = Asset::Erc20 {
+        address: address!("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"),
+        symbol: Cow::Borrowed("usdc"),
+        decimals: 6,
+    };
+
+    pub const ETHEREUM_USDT: Asset = Asset::Erc20 {
+        address: address!("0xdAC17F958D2ee523a2206206994597C13D831ec7"),
+        symbol: Cow::Borrowed("usdt"),
+        decimals: 6,
+    };
+
+    pub const ETHEREUM_WBTC: Asset = Asset::Erc20 {
+        address: address!("0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599"),
+        symbol: Cow::Borrowed("wbtc"),
+        decimals: 8,
+    };
+
+    pub const SEPOLIA_DAI: Asset = Asset::Erc20 {
+        address: address!("0xFF34B3d4Aee8ddCd6F9AFFFB6Fe49bD371b8a357"),
+        symbol: Cow::Borrowed("dai"),
+        decimals: 18,
+    };
+
     #[must_use]
     pub fn symbol(&self) -> &str {
         match self {

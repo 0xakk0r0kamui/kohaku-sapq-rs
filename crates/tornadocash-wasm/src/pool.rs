@@ -9,7 +9,7 @@ use crate::{asset::Asset, hex::Hex, note_string::NoteString};
 /// See [`kohaku_tornadocash::Pool`] for more details.
 #[wasm_bindgen]
 pub struct Pool {
-    inner: CorePool,
+    pub(crate) inner: CorePool,
 }
 
 #[wasm_bindgen]
