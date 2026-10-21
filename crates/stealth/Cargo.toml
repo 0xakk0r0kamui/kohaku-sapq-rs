@@ -17,6 +17,7 @@ alloy = { workspace = true, features = [
     "transports",
 ] }
 futures = { workspace = true }
+kohaku-rpc-provider = { workspace = true }
 pqsa-core = { workspace = true }
 pqsa-per-payment = { workspace = true }
 rand = { workspace = true }
@@ -39,7 +40,6 @@ serde_json = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
-async-trait = { workspace = true }
 alloy = { workspace = true, features = ["provider-anvil-node"] }
 anyhow = { workspace = true }
 hex = { workspace = true }

@@ -1,33 +1,23 @@
-use alloy::primitives::Address;
-use pqsa_core::{StealthScheme, keygen_seed};
-use pqsa_per_payment::SchemeId3;
+use pqsa_core::keygen_seed;
 use rand::CryptoRng;
 use thiserror::Error;
-use tracing::{debug, trace};
+use tracing::debug;
 use zeroize::Zeroizing;
 
-pub use pqsa_core::Error as EngineError;
+pub use pqsa_core::{Error as EngineError, StealthScheme};
 pub use pqsa_per_payment::{
     Announcement as StealthAddress, Master, Match, MetaAddress as StealthMetaAddress, Scanner,
-    SpendKey, Tracking,
+    SchemeId3, SpendKey, Tracking,
 };
 pub use secrecy::ExposeSecret;
 
 #[derive(Debug, Error, Clone, Copy, PartialEq, Eq)]
 pub enum SchemeError {
     #[error("scheme 3 engine error: {0:?}")]
-    Engine(EngineError),
+    Engine(#[from] EngineError),
     #[error("key generation retry limit reached")]
     KeygenExhausted,
 }
-
-impl From<EngineError> for SchemeError {
-    fn from(error: EngineError) -> Self {
-        Self::Engine(error)
-    }
-}
-
-pub const SCHEME_ID: u64 = SchemeId3::SCHEME_ID;
 
 const KEYGEN_ATTEMPTS: u64 = 1_024;
 const RANDOM_ANNOUNCEMENT_ATTEMPTS: usize = 4;
@@ -60,30 +50,30 @@ impl core::fmt::Debug for AccountSeed {
 }
 
 #[derive(Debug)]
-pub struct Scheme3Account {
+pub struct Account {
     meta_address: StealthMetaAddress,
     master_key: Master,
     tracking_key: Tracking,
 }
 
 #[derive(Debug)]
-pub struct DerivedScheme3Account {
-    pub account: Scheme3Account,
+pub struct DerivedAccount {
+    pub account: Account,
     pub keygen_index: u64,
 }
 
-impl Scheme3Account {
+impl Account {
     /// Derives the first valid account from a 32-byte master key.
     ///
     /// # Errors
     ///
     /// Returns an engine error for invalid input, or [`SchemeError::KeygenExhausted`]
     /// after `KEYGEN_ATTEMPTS` attempts.
-    pub fn from_keygen_master(master: &[u8]) -> Result<DerivedScheme3Account, SchemeError> {
+    pub fn from_keygen_master(master: &[u8]) -> Result<DerivedAccount, SchemeError> {
         for keygen_index in 0..KEYGEN_ATTEMPTS {
             match Self::from_keygen_master_at(master, keygen_index) {
                 Ok(account) => {
-                    return Ok(DerivedScheme3Account {
+                    return Ok(DerivedAccount {
                         account,
                         keygen_index,
                     });
@@ -101,7 +91,7 @@ impl Scheme3Account {
     pub fn from_keygen_master_at(master: &[u8], keygen_index: u64) -> Result<Self, SchemeError> {
         let seed = keygen_seed(
             master,
-            SCHEME_ID,
+            SchemeId3::SCHEME_ID,
             SchemeId3::NAME.as_bytes(),
             keygen_index,
             SchemeId3::KEYGEN_SEED_BYTES,
@@ -119,7 +109,7 @@ impl Scheme3Account {
     }
 
     fn from_keys((meta, master, tracking): pqsa_core::Keys<SchemeId3>) -> Self {
-        debug!(scheme_id = SCHEME_ID, "scheme 3 keygen");
+        debug!(scheme_id = SchemeId3::SCHEME_ID, "scheme 3 keygen");
         Self {
             meta_address: meta,
             master_key: master,
@@ -143,12 +133,12 @@ impl Scheme3Account {
     }
 
     pub fn scanner(&self) -> Result<Scanner, SchemeError> {
-        bind_scanner(&self.tracking_key, &self.meta_address)
+        Ok(SchemeId3::bind(&self.tracking_key, &self.meta_address)?)
     }
 
     /// Derives the spend key. Fails if this account does not own the matched address.
     pub fn spend_key(&self, matched: &Match) -> Result<SpendKey, SchemeError> {
-        compute_stealth_spend_key(&self.master_key, matched)
+        Ok(SchemeId3::spend_key(&self.master_key, matched)?)
     }
 }
 
@@ -164,86 +154,27 @@ pub fn generate_stealth_address(
     for _ in 0..RANDOM_ANNOUNCEMENT_ATTEMPTS {
         let mut seed = Zeroizing::new([0u8; 64]);
         rng.fill_bytes(seed.as_mut());
-        match generate_stealth_address_with_seed(meta_address, seed.as_slice()) {
-            Ok(announcement) => return Ok(announcement),
-            Err(SchemeError::Engine(EngineError::SeedRejected)) => {}
-            Err(error) => return Err(error),
+        match SchemeId3::announce(meta_address, seed.as_slice()) {
+            Ok(announcement) => {
+                debug!(
+                    scheme_id = SchemeId3::SCHEME_ID,
+                    ciphertext_len = announcement.ct().len(),
+                    "generated stealth address"
+                );
+                return Ok(announcement);
+            }
+            Err(EngineError::SeedRejected) => {}
+            Err(error) => return Err(error.into()),
         }
     }
     Err(EngineError::SeedRejected.into())
 }
 
-/// Generates a stealth address from a 64-byte seed.
-/// Reusing a seed repeats the ephemeral key and, for the same recipient, the address.
-///
-/// # Errors
-///
-/// Returns an engine error when the seed or meta-address is invalid.
-pub fn generate_stealth_address_with_seed(
-    meta_address: &StealthMetaAddress,
-    seed: &[u8],
-) -> Result<StealthAddress, SchemeError> {
-    let generated = SchemeId3::announce(meta_address, seed)?;
-    debug!(
-        scheme_id = SCHEME_ID,
-        stealth_address = %Address::from(generated.stealth_address),
-        ciphertext_len = generated.ct().len(),
-        "generated stealth address"
-    );
-    Ok(generated)
-}
-
-/// Creates a scanner from a tracking key and meta-address.
-///
-/// # Errors
-///
-/// Fails if the tracking key does not belong to the meta-address.
-pub fn bind_scanner(
-    tracking_key: &Tracking,
-    meta_address: &StealthMetaAddress,
-) -> Result<Scanner, SchemeError> {
-    let scanner = SchemeId3::bind(tracking_key, meta_address)?;
-    debug!(kem_key_len = meta_address.ek().len(), "scanner bound");
-    Ok(scanner)
-}
-
-/// Returns a match for this scanner, or `None` for a foreign or invalid announcement.
-#[must_use]
-pub fn scan_announcement(scanner: &Scanner, announcement: &StealthAddress) -> Option<Match> {
-    let Some(matched) = SchemeId3::scan(scanner, announcement) else {
-        trace!(
-            stealth_address = %Address::from(announcement.stealth_address),
-            "skip announcement: not ours"
-        );
-        return None;
-    };
-    debug!(
-        stealth_address = %Address::from(matched.stealth_address),
-        "scheme 3 announcement matched"
-    );
-    Some(matched)
-}
-
-/// Computes the stealth private key. Fails if `master_key` does not own the matched address.
-pub fn compute_stealth_spend_key(
-    master_key: &Master,
-    matched: &Match,
-) -> Result<SpendKey, SchemeError> {
-    let key = SchemeId3::spend_key(master_key, matched)?;
-    debug!(
-        stealth_address = %Address::from(matched.stealth_address),
-        "scheme 3 spend key derived"
-    );
-    Ok(key)
-}
-
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod tests {
     use super::*;
-    use std::{
-        io,
-        sync::{Arc, Mutex},
-    };
+    use alloy::primitives::Address;
+    use std::sync::Mutex;
     use tracing::Level;
 
     const V3_09_SEED: &str = "1111111111111111111111111111111111111111111111111111111111111111\
@@ -251,7 +182,7 @@ mod tests {
          e582b7d75e6c80b05ae392a1fc9f7153b12390fd99930368cc67a768baebc8a0\
          1cdacb8740c0b87c4a379575f187b367cbfa3b300bf591b109f79816e9cbe8f0";
 
-    /// `pq-stealth-scheme3-public` `b576b37c` `vectors/section-2.json` V3-09 `expect.meta_address`.
+    /// `pq-stealth-scheme3-public` `v0.1.0` `vectors/section-2.json` V3-09 `expect.meta_address`.
     const V3_09_META: &str = "034f355bdcb7cc0af728ef3cceb9615d90684bb5b2ca5f859ab0f0b704075871aa\
          023c72addb4fdf09af94f0c94d7fe92a386a7e70cf8a1d85916386bb2535c7b1b1\
          28c793778741b80b02b4339f2aa4347255b099f17264e1b8cc0a2c7c2a1a79f799\
@@ -292,41 +223,31 @@ mod tests {
          c159d3afb4b687b40dfbf371a9c2644b605187b71a14bc4c8678fe8247";
 
     fn unhex(s: &str) -> Vec<u8> {
-        let s: String = s.chars().filter(|c| !c.is_whitespace()).collect();
         hex::decode(s).unwrap()
     }
 
-    struct LogWriter(Arc<Mutex<Vec<u8>>>);
-
-    impl io::Write for LogWriter {
-        fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
-            self.0.lock().unwrap().write(bytes)
-        }
-
-        fn flush(&mut self) -> io::Result<()> {
-            Ok(())
-        }
-    }
-
     fn captured(body: impl FnOnce()) -> String {
-        let bytes = Arc::new(Mutex::new(Vec::new()));
-        let writer = Arc::clone(&bytes);
         // Multiple dispatches force tracing to check the thread's current subscriber.
         let _inactive = tracing::Dispatch::new(tracing::subscriber::NoSubscriber::default());
         let subscriber = tracing_subscriber::fmt()
             .with_ansi(false)
             .without_time()
             .with_max_level(Level::TRACE)
-            .with_writer(move || LogWriter(Arc::clone(&writer)))
+            .with_writer(Mutex::new(Vec::<u8>::new()))
             .finish();
         let capture = tracing::Dispatch::new(subscriber);
         tracing::dispatcher::with_default(&capture, body);
-        String::from_utf8(bytes.lock().unwrap().clone()).unwrap()
+        let bytes = capture
+            .downcast_ref::<Mutex<Vec<u8>>>()
+            .unwrap()
+            .lock()
+            .unwrap();
+        String::from_utf8(bytes.clone()).unwrap()
     }
 
     #[test]
     fn keygen_master_derivation() {
-        let derived = Scheme3Account::from_keygen_master(&[0xa5; 32]).unwrap();
+        let derived = Account::from_keygen_master(&[0xa5; 32]).unwrap();
 
         assert_eq!(derived.keygen_index, 0);
         // Scheme 3 seed from pqsa-core's keygen_seed_golden test.
@@ -336,18 +257,17 @@ mod tests {
             "447412f0c3d2978d6b1c1b1830907c82c214f889af40478f2b84efe79e9d15e1",
             "a4cb056acf428e47138a6520c4494ec7b3c244082e7d31f44ad1f24327a2fd6c"
         ));
-        let expected = Scheme3Account::from_seed(&seed).unwrap();
+        let expected = Account::from_seed(&seed).unwrap();
         assert_eq!(
             SchemeId3::meta_to_bytes(derived.account.meta_address()),
             SchemeId3::meta_to_bytes(expected.meta_address())
         );
-        let restored =
-            Scheme3Account::from_keygen_master_at(&[0xa5; 32], derived.keygen_index).unwrap();
+        let restored = Account::from_keygen_master_at(&[0xa5; 32], derived.keygen_index).unwrap();
         assert_eq!(
             SchemeId3::meta_to_bytes(restored.meta_address()),
             SchemeId3::meta_to_bytes(derived.account.meta_address())
         );
-        let next = Scheme3Account::from_keygen_master_at(&[0xa5; 32], 1).unwrap();
+        let next = Account::from_keygen_master_at(&[0xa5; 32], 1).unwrap();
         assert_ne!(
             SchemeId3::meta_to_bytes(next.meta_address()),
             SchemeId3::meta_to_bytes(restored.meta_address())
@@ -357,11 +277,11 @@ mod tests {
     #[test]
     fn keygen_master_rejects_wrong_lengths() {
         assert_eq!(
-            Scheme3Account::from_keygen_master(&[7; 31]).unwrap_err(),
+            Account::from_keygen_master(&[7; 31]).unwrap_err(),
             SchemeError::Engine(EngineError::Malformed)
         );
         assert_eq!(
-            Scheme3Account::from_keygen_master_at(&[7; 33], 0).unwrap_err(),
+            Account::from_keygen_master_at(&[7; 33], 0).unwrap_err(),
             SchemeError::Engine(EngineError::Malformed)
         );
     }
@@ -369,7 +289,7 @@ mod tests {
     #[test]
     fn v3_09_keygen_matches_the_published_meta_address() {
         let seed = unhex(V3_09_SEED);
-        let account = Scheme3Account::from_seed(&seed).unwrap();
+        let account = Account::from_seed(&seed).unwrap();
         assert_eq!(
             SchemeId3::meta_to_bytes(account.meta_address()),
             unhex(V3_09_META)
@@ -380,30 +300,25 @@ mod tests {
     fn invalid_account_seed() {
         for seed in [&[0x11; 96][..], &[0x11; 127][..]] {
             assert_eq!(
-                Scheme3Account::from_seed(seed).unwrap_err(),
+                Account::from_seed(seed).unwrap_err(),
                 SchemeError::Engine(EngineError::Malformed)
             );
         }
         let mut seed = unhex(V3_09_SEED);
         seed[..32].fill(0);
         assert_eq!(
-            Scheme3Account::from_seed(&seed).unwrap_err(),
+            Account::from_seed(&seed).unwrap_err(),
             SchemeError::Engine(EngineError::NoValidScalar)
         );
     }
 
     #[test]
     fn foreign_account() {
-        let account = Scheme3Account::from_keygen_master(&[7; 32])
-            .unwrap()
-            .account;
-        let other = Scheme3Account::from_keygen_master(&[8; 32])
-            .unwrap()
-            .account;
-        let announcement =
-            generate_stealth_address_with_seed(account.meta_address(), &[0x44; 64]).unwrap();
+        let account = Account::from_keygen_master(&[7; 32]).unwrap().account;
+        let other = Account::from_keygen_master(&[8; 32]).unwrap().account;
+        let announcement = SchemeId3::announce(account.meta_address(), &[0x44; 64]).unwrap();
         let scanner = account.scanner().unwrap();
-        let matched = scan_announcement(&scanner, &announcement).unwrap();
+        let matched = SchemeId3::scan(&scanner, &announcement).unwrap();
         assert_eq!(
             Address::from(matched.stealth_address),
             Address::from(announcement.stealth_address)
@@ -412,23 +327,23 @@ mod tests {
             other.spend_key(&matched).unwrap_err(),
             SchemeError::Engine(EngineError::MasterKeyMismatch)
         );
-        assert!(scan_announcement(&other.scanner().unwrap(), &announcement).is_none());
+        assert!(SchemeId3::scan(&other.scanner().unwrap(), &announcement).is_none());
 
         let mut wrong_tag = announcement.clone();
         wrong_tag.view_tag[0] ^= 0xff;
-        assert!(scan_announcement(&scanner, &wrong_tag).is_none());
+        assert!(SchemeId3::scan(&scanner, &wrong_tag).is_none());
 
         let mut wrong_address = announcement;
         wrong_address.stealth_address = Address::ZERO.into_array();
-        assert!(scan_announcement(&scanner, &wrong_address).is_none());
+        assert!(SchemeId3::scan(&scanner, &wrong_address).is_none());
     }
 
     #[test]
     fn announcement_seed() {
-        let account = Scheme3Account::from_seed(&unhex(V3_09_SEED)).unwrap();
+        let account = Account::from_seed(&unhex(V3_09_SEED)).unwrap();
         let seed = [0x44; 64];
-        let first = generate_stealth_address_with_seed(account.meta_address(), &seed).unwrap();
-        let second = generate_stealth_address_with_seed(account.meta_address(), &seed).unwrap();
+        let first = SchemeId3::announce(account.meta_address(), &seed).unwrap();
+        let second = SchemeId3::announce(account.meta_address(), &seed).unwrap();
         assert_eq!(
             SchemeId3::announcement_to_bytes(&first),
             SchemeId3::announcement_to_bytes(&second)
@@ -436,12 +351,12 @@ mod tests {
         let mut rejected = seed;
         rejected[..32].fill(0);
         assert_eq!(
-            generate_stealth_address_with_seed(account.meta_address(), &rejected).unwrap_err(),
-            SchemeError::Engine(EngineError::SeedRejected)
+            SchemeId3::announce(account.meta_address(), &rejected).unwrap_err(),
+            EngineError::SeedRejected
         );
         assert_eq!(
-            generate_stealth_address_with_seed(account.meta_address(), &seed[..63]).unwrap_err(),
-            SchemeError::Engine(EngineError::Malformed)
+            SchemeId3::announce(account.meta_address(), &seed[..63]).unwrap_err(),
+            EngineError::Malformed
         );
     }
 
@@ -491,16 +406,13 @@ mod tests {
 
     #[test]
     fn retries_rejected_seed() {
-        let account = Scheme3Account::from_keygen_master(&[7; 32])
-            .unwrap()
-            .account;
+        let account = Account::from_keygen_master(&[7; 32]).unwrap().account;
         let mut rng = SeedRng {
             bytes: [vec![0; 64], vec![0x44; 64]].concat(),
             consumed: 0,
         };
         let generated = generate_stealth_address(account.meta_address(), &mut rng).unwrap();
-        let expected =
-            generate_stealth_address_with_seed(account.meta_address(), &[0x44; 64]).unwrap();
+        let expected = SchemeId3::announce(account.meta_address(), &[0x44; 64]).unwrap();
         assert_eq!(
             SchemeId3::announcement_to_bytes(&generated),
             SchemeId3::announcement_to_bytes(&expected)
@@ -510,9 +422,7 @@ mod tests {
 
     #[test]
     fn seed_retry_limit() {
-        let account = Scheme3Account::from_keygen_master(&[7; 32])
-            .unwrap()
-            .account;
+        let account = Account::from_keygen_master(&[7; 32]).unwrap().account;
         let mut rng = SeedRng {
             bytes: vec![0; 5 * 64],
             consumed: 0,
@@ -526,9 +436,7 @@ mod tests {
 
     #[test]
     fn invalid_kem_key() {
-        let account = Scheme3Account::from_keygen_master(&[7; 32])
-            .unwrap()
-            .account;
+        let account = Account::from_keygen_master(&[7; 32]).unwrap().account;
         let meta = account.meta_address();
         let recipient =
             StealthMetaAddress::new(meta.spending, meta.viewing_ec, vec![0xff; meta.ek().len()])
@@ -555,7 +463,7 @@ mod tests {
         let seed = unhex(V3_09_SEED);
         let mut secret_renderings = Vec::new();
         let logged = captured(|| {
-            let account = Scheme3Account::from_seed(&seed).unwrap();
+            let account = Account::from_seed(&seed).unwrap();
             let account_debug = format!("{account:?}");
             let master = account.master_key();
             for secret in [
@@ -569,10 +477,13 @@ mod tests {
                 assert!(!account_debug.contains(&format!("{secret:?}")));
             }
 
-            let generated =
-                generate_stealth_address_with_seed(account.meta_address(), &[0x44; 64]).unwrap();
+            let mut rng = SeedRng {
+                bytes: vec![0x44; 64],
+                consumed: 0,
+            };
+            let generated = generate_stealth_address(account.meta_address(), &mut rng).unwrap();
             let scanner = account.scanner().unwrap();
-            let matched = scan_announcement(&scanner, &generated).unwrap();
+            let matched = SchemeId3::scan(&scanner, &generated).unwrap();
             let key = account.spend_key(&matched).unwrap();
 
             for secret in [
@@ -583,13 +494,7 @@ mod tests {
                 secret_renderings.push(format!("{secret:?}"));
             }
         });
-        for message in [
-            "scheme 3 keygen",
-            "generated stealth address",
-            "scanner bound",
-            "scheme 3 announcement matched",
-            "scheme 3 spend key derived",
-        ] {
+        for message in ["scheme 3 keygen", "generated stealth address"] {
             assert!(
                 logged.contains(message),
                 "missing captured event: {message}"

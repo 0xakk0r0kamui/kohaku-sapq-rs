@@ -4576,16 +4576,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "kohaku-rpc-provider"
+version = "0.1.0"
+dependencies = [
+ "alloy",
+ "futures",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "kohaku-stealth"
 version = "0.1.0"
 dependencies = [
  "alloy",
  "anyhow",
- "async-trait",
  "futures",
  "getrandom 0.2.17",
  "getrandom 0.4.3",
  "hex",
+ "kohaku-rpc-provider",
  "pqsa-core",
  "pqsa-per-payment",
  "rand 0.10.2",
@@ -4598,16 +4608,6 @@ dependencies = [
  "tracing-subscriber",
  "wasm-bindgen-test",
  "zeroize",
-]
-
-[[package]]
-name = "kohaku-rpc-provider"
-version = "0.1.0"
-dependencies = [
- "alloy",
- "futures",
- "tokio",
- "tracing",
 ]
 
 [[package]]
@@ -5738,7 +5738,7 @@ dependencies = [
 [[package]]
 name = "pqsa-core"
 version = "0.0.0"
-source = "git+https://github.com/namnc/pq-stealth-scheme3-public.git?rev=b576b37cbd80db51c343b85d5fdad599b298047d#b576b37cbd80db51c343b85d5fdad599b298047d"
+source = "git+https://github.com/namnc/pq-stealth-scheme3-public.git?tag=v0.1.0#1e1233fc3b47d84bc075058e45f7b3da723ed505"
 dependencies = [
  "getrandom 0.4.3",
  "hkdf",
@@ -5750,7 +5750,7 @@ dependencies = [
 [[package]]
 name = "pqsa-ec"
 version = "0.0.0"
-source = "git+https://github.com/namnc/pq-stealth-scheme3-public.git?rev=b576b37cbd80db51c343b85d5fdad599b298047d#b576b37cbd80db51c343b85d5fdad599b298047d"
+source = "git+https://github.com/namnc/pq-stealth-scheme3-public.git?tag=v0.1.0#1e1233fc3b47d84bc075058e45f7b3da723ed505"
 dependencies = [
  "k256",
  "pqsa-core",
@@ -5761,7 +5761,7 @@ dependencies = [
 [[package]]
 name = "pqsa-kem"
 version = "0.0.0"
-source = "git+https://github.com/namnc/pq-stealth-scheme3-public.git?rev=b576b37cbd80db51c343b85d5fdad599b298047d#b576b37cbd80db51c343b85d5fdad599b298047d"
+source = "git+https://github.com/namnc/pq-stealth-scheme3-public.git?tag=v0.1.0#1e1233fc3b47d84bc075058e45f7b3da723ed505"
 dependencies = [
  "ml-kem",
  "pqsa-core",
@@ -5771,7 +5771,7 @@ dependencies = [
 [[package]]
 name = "pqsa-per-payment"
 version = "0.0.0"
-source = "git+https://github.com/namnc/pq-stealth-scheme3-public.git?rev=b576b37cbd80db51c343b85d5fdad599b298047d#b576b37cbd80db51c343b85d5fdad599b298047d"
+source = "git+https://github.com/namnc/pq-stealth-scheme3-public.git?tag=v0.1.0#1e1233fc3b47d84bc075058e45f7b3da723ed505"
 dependencies = [
  "pqsa-core",
  "pqsa-ec",

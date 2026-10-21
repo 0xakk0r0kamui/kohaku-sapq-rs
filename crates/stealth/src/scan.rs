@@ -1,51 +1,37 @@
 use std::ops::RangeInclusive;
 
 use alloy::primitives::Address;
-use futures::{Stream, TryStreamExt, stream};
+use futures::{Stream, TryStreamExt, future};
 
 use crate::{
-    scheme3::{Match, Scanner, Scheme3Account, SchemeError, SpendKey, scan_announcement},
+    scheme3::{Match, Scanner, SchemeId3, StealthScheme},
     syncer::{AnnouncementRecord, FetchEvent},
 };
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct MatchedStealthAddress {
-    record: AnnouncementRecord,
-    match_result: Match,
+    pub record: AnnouncementRecord,
+    /// Contains the shared secret for this payment.
+    pub match_result: Match,
 }
 
 impl MatchedStealthAddress {
     #[must_use]
-    pub const fn record(&self) -> &AnnouncementRecord {
-        &self.record
-    }
-
-    #[must_use]
-    pub const fn match_result(&self) -> &Match {
-        &self.match_result
-    }
-
-    #[must_use]
     pub fn stealth_address(&self) -> Address {
         Address::from(self.match_result.stealth_address)
-    }
-
-    /// Derives the key for this address. Fails if `account` does not own the address.
-    pub fn spend_key(&self, account: &Scheme3Account) -> Result<SpendKey, SchemeError> {
-        account.spend_key(&self.match_result)
     }
 }
 
 #[must_use]
 pub fn scan_record(scanner: &Scanner, record: AnnouncementRecord) -> Option<MatchedStealthAddress> {
-    let match_result = scan_announcement(scanner, record.announcement())?;
+    let match_result = SchemeId3::scan(scanner, &record.announcement)?;
     Some(MatchedStealthAddress {
         record,
         match_result,
     })
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 #[allow(
     clippy::large_enum_variant,
     reason = "Avoid a heap allocation for each match."
@@ -61,7 +47,7 @@ pub enum ScanEvent {
 
 /// Returns matches from an announcement stream, followed by [`ScanEvent::RangeScanned`] events.
 /// Matching runs on the thread polling the stream.
-/// A source error is forwarded and ends the stream.
+/// Source errors are forwarded; the source determines whether scanning can continue.
 pub fn get_announcements_for_user<'a, S, E>(
     scanner: &'a Scanner,
     source: S,
@@ -70,43 +56,32 @@ where
     S: Stream<Item = Result<FetchEvent, E>> + 'a,
     E: 'a,
 {
-    stream::try_unfold(Box::pin(source), move |mut source| async move {
-        while let Some(event) = source.try_next().await? {
-            let event = match event {
-                FetchEvent::Announcement(record) => {
-                    let Some(matched) = scan_record(scanner, record) else {
-                        continue;
-                    };
-                    ScanEvent::Match(matched)
-                }
-                FetchEvent::RangeFetched {
-                    range,
-                    rejected_logs,
-                } => ScanEvent::RangeScanned {
-                    range,
-                    rejected_logs,
-                },
-            };
-            return Ok(Some((event, source)));
-        }
-        Ok(None)
+    source.try_filter_map(move |event| {
+        future::ready(Ok(match event {
+            FetchEvent::Announcement(record) => scan_record(scanner, record).map(ScanEvent::Match),
+            FetchEvent::RangeFetched {
+                range,
+                rejected_logs,
+            } => Some(ScanEvent::RangeScanned {
+                range,
+                rejected_logs,
+            }),
+        }))
     })
 }
 
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod tests {
     use alloy::primitives::B256;
-    use futures::{StreamExt, pin_mut};
+    use futures::{StreamExt, pin_mut, stream};
     use rand::{SeedableRng, rngs::StdRng};
 
     use super::*;
-    use crate::generate_stealth_address;
+    use crate::{Account, generate_stealth_address};
 
     #[tokio::test]
     async fn matches_before_progress() {
-        let account = Scheme3Account::from_keygen_master(&[7; 32])
-            .unwrap()
-            .account;
+        let account = Account::from_keygen_master(&[7; 32]).unwrap().account;
         let scanner = account.scanner().unwrap();
         let mut rng = StdRng::from_seed([0x52; 32]);
         let first = generate_stealth_address(account.meta_address(), &mut rng).unwrap();
@@ -119,14 +94,16 @@ mod tests {
         let mut nonmatch = first.clone();
         nonmatch.stealth_address = [0; 20];
         let record = |announcement, index| {
-            AnnouncementRecord::new(
+            let (_, _, metadata) = SchemeId3::announcement_to_bytes(&announcement);
+            AnnouncementRecord {
                 announcement,
-                Address::ZERO,
-                0,
-                B256::ZERO,
-                B256::ZERO,
-                index,
-            )
+                metadata: metadata.into(),
+                caller: Address::ZERO,
+                block_number: 0,
+                block_hash: B256::ZERO,
+                transaction_hash: B256::ZERO,
+                log_index: index,
+            }
         };
         let events = vec![
             Ok::<_, &'static str>(FetchEvent::Announcement(record(first, 0))),
@@ -148,9 +125,9 @@ mod tests {
                 panic!("expected match before progress");
             };
             assert_eq!(matched.stealth_address(), address);
-            assert_eq!(matched.record().stealth_address(), address);
+            assert_eq!(matched.record.stealth_address(), address);
             let debug = format!("{matched:?}");
-            let secret = &matched.match_result().shared_secret;
+            let secret = &matched.match_result.shared_secret;
             assert!(!debug.contains(&hex::encode(secret)));
             assert!(!debug.contains(&format!("{secret:?}")));
         }
@@ -162,21 +139,38 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn source_error_stops_scan() {
-        let account = Scheme3Account::from_keygen_master(&[7; 32])
-            .unwrap()
-            .account;
+    async fn source_can_continue_after_error() {
+        let account = Account::from_keygen_master(&[7; 32]).unwrap().account;
         let scanner = account.scanner().unwrap();
+        let announcement = SchemeId3::announce(account.meta_address(), &[0x44; 64]).unwrap();
+        let address = Address::from(announcement.stealth_address);
+        let (_, _, metadata) = SchemeId3::announcement_to_bytes(&announcement);
         let events = stream::iter([
             Err("endpoint failed"),
+            Ok(FetchEvent::Announcement(AnnouncementRecord {
+                announcement,
+                metadata: metadata.into(),
+                caller: Address::ZERO,
+                block_number: 0,
+                block_hash: B256::ZERO,
+                transaction_hash: B256::ZERO,
+                log_index: 0,
+            })),
             Ok(FetchEvent::RangeFetched {
                 range: 0..=1,
                 rejected_logs: 0,
             }),
-        ]);
+        ])
+        .then(|event| async move { event });
         let events = get_announcements_for_user(&scanner, events);
         pin_mut!(events);
         assert_eq!(events.next().await.unwrap().unwrap_err(), "endpoint failed");
+        let Some(Ok(ScanEvent::Match(matched))) = events.next().await else {
+            panic!("expected match after source recovery");
+        };
+        assert_eq!(matched.stealth_address(), address);
+        assert!(matches!(events.next().await,
+            Some(Ok(ScanEvent::RangeScanned { range, rejected_logs: 0 })) if range == (0..=1)));
         assert!(events.next().await.is_none());
     }
 }
