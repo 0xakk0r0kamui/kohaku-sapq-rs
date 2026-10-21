@@ -32,12 +32,12 @@
 //! # ) -> Result<(), Box<dyn std::error::Error>> {
 //! let relayer = Relayer::new("https://mainnet.relayer.com");
 //!
-//! let status = relayer.status().await?;
 //! let gas_price = provider.get_gas_price().await?;
+//! let payer = relayer.quote(&pool, gas_price, U256::ZERO).await?;
 //! let merkle_proof = tree.leaf_proof(note.commitment())?;
 //!
 //! let withdrawal = Withdrawal::new(&pool, note, recipient)
-//!     .with_payer(status.quote(&pool, gas_price, U256::ZERO)?)
+//!     .with_payer(payer)
 //!     .prove(&merkle_proof, rng)?;
 //!
 //! // Confirmation is judged by the nullifier being spent on-chain, not by the relayer's report.
@@ -50,10 +50,14 @@
 //! ```
 use std::time::Duration;
 
-use alloy::{primitives::TxHash, providers::Provider};
+use alloy::{
+    primitives::{TxHash, U256},
+    providers::Provider,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::{
+    Payer,
     field::Field,
     pool::Pool,
     provider::TornadoProviderExt,
@@ -160,6 +164,17 @@ impl Relayer {
             .json()
             .await?;
         Ok(response)
+    }
+
+    /// Quotes the fee for a withdrawal paid by the relayer.
+    pub async fn quote(
+        &self,
+        pool: &Pool,
+        gas_price: u128,
+        refund: U256,
+    ) -> Result<Payer, RelayerError> {
+        let status = self.status().await?;
+        status.quote(pool, gas_price, refund)
     }
 
     /// Submits a withdrawal job to the relayer.
