@@ -1,3 +1,5 @@
+//! Tornado Cash Merkle Tree instance.
+
 use std::sync::OnceLock;
 
 use alloy::primitives::keccak256;
@@ -20,12 +22,15 @@ pub type MerkleProof = kohaku_merkle_tree::proof::MerkleProof<20, 2, Field>;
 /// `MerkleTree` extension trait for Tornado Cash.
 pub trait MerkleTreeExt {
     /// Splices the given events into the Merkle tree.
+    ///
+    /// # Errors
+    /// Returns an error if the events are non-contiguous or if the splicing fails.
     fn splice_events(&mut self, events: &[SyncEvent]) -> Result<(), MerkleTreeError>;
 }
 
-/// Hasher used in Tornado Cash Merkle tree.
+/// MiMC sponge hasher for Tornado Cash Merkle tree.
 ///
-/// Follows the hashing scheme used in Tornado Cash. Reference implementation:
+/// Reference implementation:
 /// [contracts/Classic/MerkleTreeWithHistory.sol](https://github.com/tornado-dao/tornado-contracts/blob/cc57528ae13e762c36ae715f37e018528d6e0605/contracts/Classic/MerkleTreeWithHistory.sol#L57)
 #[derive(Copy, Clone)]
 pub struct TornadoHasher;

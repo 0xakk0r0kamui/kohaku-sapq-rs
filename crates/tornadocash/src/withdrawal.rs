@@ -66,13 +66,14 @@ impl Withdrawal {
         self
     }
 
-    /// Generates the proof this withdrawal needs to be submitted.
+    /// Proves this withdrawal using the provided Merkle proof.
     ///
-    /// `tree` must already contain this withdrawal's note, and its root must still be within the
-    /// pool's on-chain root history for the withdrawal to be accepted.
+    /// `merkle_proof` must be a valid proof for this note's commitment against a
+    /// recent Merkle root. Outdated proofs are rejected by the contract.
     ///
     /// # Errors
-    /// Returns an error if the note is missing from `tree` or if proof generation fails.
+    /// Returns an error if `merkle_proof` does not match this withdrawal's commitment,
+    /// or if proving fails.
     pub fn prove(
         self,
         merkle_proof: &MerkleProof,
@@ -116,7 +117,7 @@ impl ProvenWithdrawal {
     #[must_use]
     pub fn input(&self) -> Vec<u8> {
         withdrawCall {
-            _proof: self.proof_bytes(),
+            _proof: self.solidity_proof(),
             _root: self.root.into(),
             _nullifierHash: self.note.nullifier_hash().into(),
             _recipient: self.recipient,
@@ -133,9 +134,9 @@ impl ProvenWithdrawal {
         self.pool.address
     }
 
-    /// Returns the proof in the format expected by the Solidity contract.
+    /// Returns the abi-encoded proof for this withdrawal transaction.
     #[must_use]
-    pub fn proof_bytes(&self) -> Bytes {
+    pub fn solidity_proof(&self) -> Bytes {
         into_solidity_proof(&self.proof)
     }
 }

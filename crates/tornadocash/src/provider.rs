@@ -3,6 +3,7 @@ use ruint::aliases::U256;
 
 use crate::{abis::tornado::Tornado, asset::Asset, field::Field, pool::Pool};
 
+/// Extension trait for [`Provider`] with Tornadocash-specific accessors.
 pub trait TornadoProviderExt: Provider {
     /// Indicates whether `nullifier_hash` has been spent.
     fn is_spent(

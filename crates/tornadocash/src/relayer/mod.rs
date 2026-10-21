@@ -45,7 +45,7 @@
 //! let tx_hash = relayer.await_confirmation(&provider, &receipt).await?;
 //! println!("{tx_hash:?}");
 //!
-//! Ok(())
+//! # Ok(())
 //! # }
 //! ```
 use std::time::Duration;
@@ -185,7 +185,7 @@ impl Relayer {
         let nullifier_hash = withdrawal.note.nullifier_hash();
         let request = WithdrawRequest {
             contract: withdrawal.pool.address,
-            proof: withdrawal.proof_bytes(),
+            proof: withdrawal.solidity_proof(),
             args: (
                 withdrawal.root.into(),
                 nullifier_hash.into(),
