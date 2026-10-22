@@ -1,7 +1,6 @@
 use std::{array::from_fn, ops::Deref};
 
 use alloy::{
-    network::TransactionBuilder,
     primitives::{Address, Bytes},
     rpc::types::TransactionRequest,
     sol_types::SolCall,
@@ -12,8 +11,8 @@ use ruint::aliases::U256;
 use websnark_rs::proof::Proof;
 
 use crate::{
-    abis::tornado::Tornado::withdrawCall, field::Field, merkle_tree::MerkleProof, note::Note,
-    pool::Pool,
+    Asset, Call, abis::tornado::Tornado::withdrawCall, field::Field, merkle_tree::MerkleProof,
+    note::Note, pool::Pool,
 };
 
 /// A Tornado Cash withdrawal.
@@ -113,10 +112,13 @@ impl Withdrawal {
 }
 
 impl ProvenWithdrawal {
-    /// Returns the input data for this withdrawal transaction.
+    /// Returns the call to withdraw from the pool using the generated proof.
+    ///
+    /// ERC20 withdrawals attach the native-currency refund paid to the recipient.
+    /// Native-asset withdrawals attach zero value.
     #[must_use]
-    pub fn input(&self) -> Vec<u8> {
-        withdrawCall {
+    pub fn data(&self) -> Call {
+        let input = withdrawCall {
             _proof: self.solidity_proof(),
             _root: self.root.into(),
             _nullifierHash: self.note.nullifier_hash().into(),
@@ -125,13 +127,16 @@ impl ProvenWithdrawal {
             _fee: self.payer.fee,
             _refund: self.payer.refund,
         }
-        .abi_encode()
-    }
+        .abi_encode();
 
-    /// Returns the target address for this withdrawal transaction.
-    #[must_use]
-    pub fn target(&self) -> Address {
-        self.pool.address
+        Call {
+            target: self.pool.address,
+            value: match self.pool.asset {
+                Asset::Native { .. } => U256::ZERO,
+                Asset::Erc20 { .. } => self.payer.refund,
+            },
+            input: input.into(),
+        }
     }
 
     /// Returns the abi-encoded proof for this withdrawal transaction.
@@ -151,9 +156,7 @@ impl Deref for ProvenWithdrawal {
 
 impl From<ProvenWithdrawal> for TransactionRequest {
     fn from(proven_withdrawal: ProvenWithdrawal) -> Self {
-        TransactionRequest::default()
-            .with_to(proven_withdrawal.target())
-            .input(proven_withdrawal.input().into())
+        proven_withdrawal.data().into()
     }
 }
 
@@ -176,4 +179,55 @@ fn into_solidity_proof(proof: &Proof) -> Bytes {
     }
 
     proof_bytes.into()
+}
+
+#[cfg(test)]
+mod tests {
+    use alloy::primitives::B256;
+    use ark_bn254::{G1Affine, G2Affine};
+
+    use super::*;
+
+    #[test]
+    fn withdrawal_call_maps_parameters_and_attaches_erc20_refund() {
+        for (pool, refund) in [
+            (Pool::ETHEREUM_ETHER_01, U256::ZERO),
+            (Pool::ETHEREUM_DAI_100, U256::from(42)),
+        ] {
+            let withdrawal = ProvenWithdrawal {
+                root: Field::from(7_usize),
+                // Call encoding only needs proof coordinates; no proof generation is exercised.
+                proof: Proof {
+                    a: G1Affine::default(),
+                    b: G2Affine::default(),
+                    c: G1Affine::default(),
+                },
+                inner: Withdrawal::new(
+                    &pool,
+                    Note::new([1; 31], [2; 31]),
+                    Address::with_last_byte(1),
+                )
+                .with_payer(Payer {
+                    address: Address::with_last_byte(2),
+                    fee: U256::from(3),
+                    refund,
+                }),
+            };
+            let call = withdrawal.data();
+            let input = withdrawCall::abi_decode(&call.input).unwrap();
+
+            assert_eq!(call.target, pool.address);
+            assert_eq!(call.value, refund);
+            assert_eq!(input._proof, withdrawal.solidity_proof());
+            assert_eq!(input._root, B256::from(withdrawal.root));
+            assert_eq!(
+                input._nullifierHash,
+                B256::from(withdrawal.note.nullifier_hash())
+            );
+            assert_eq!(input._recipient, withdrawal.recipient);
+            assert_eq!(input._relayer, withdrawal.payer.address);
+            assert_eq!(input._fee, withdrawal.payer.fee);
+            assert_eq!(input._refund, refund);
+        }
+    }
 }

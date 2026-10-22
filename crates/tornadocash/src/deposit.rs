@@ -1,10 +1,8 @@
-use alloy::{
-    network::TransactionBuilder, primitives::Address, rpc::types::TransactionRequest,
-    sol_types::SolCall,
-};
+use alloy::{rpc::types::TransactionRequest, sol_types::SolCall};
 use ruint::aliases::U256;
 
 use crate::{
+    Call,
     abis::{erc20::ERC20, tornado::Tornado},
     asset::Asset,
     note::Note,
@@ -27,41 +25,34 @@ impl Deposit {
         }
     }
 
-    /// Returns the value required for this deposit transaction.
+    /// Returns the call to deposit this note into the pool.
     ///
-    /// For ERC20 pools, this will be zero since the ERC20 token is transferred via
+    /// For ERC20 pools, the native value is zero since the token is transferred via
     /// a `transferFrom` call.
     #[must_use]
-    pub fn value(&self) -> U256 {
-        match self.pool.asset {
+    pub fn deposit_data(&self) -> Call {
+        let value = match self.pool.asset {
             Asset::Native { .. } => U256::from(self.pool.amount_wei),
             Asset::Erc20 { .. } => U256::ZERO,
-        }
-    }
-
-    /// Returns the input data for this deposit transaction.
-    #[must_use]
-    pub fn input(&self) -> Vec<u8> {
+        };
         let deposit_call = Tornado::depositCall {
             _commitment: self.note.commitment().into(),
         };
 
-        deposit_call.abi_encode()
+        Call {
+            target: self.pool.address,
+            value,
+            input: deposit_call.abi_encode().into(),
+        }
     }
 
-    /// Returns the target address for this deposit transaction.
-    #[must_use]
-    pub fn target(&self) -> Address {
-        self.pool.address
-    }
-
-    /// Returns the ERC20 approval transaction this deposit requires, if any.
+    /// Returns the ERC20 approval call this deposit requires, if any.
     ///
     /// Native-asset pools return [`None`]. ERC20 pools pull the deposit with `transferFrom`, so
     /// the depositor must approve the pool to spend the pool's denomination first, or the
     /// deposit transaction will revert.
     #[must_use]
-    pub fn approval(&self) -> Option<TransactionRequest> {
+    pub fn approval_data(&self) -> Option<Call> {
         let Asset::Erc20 { address, .. } = self.pool.asset else {
             return None;
         };
@@ -71,19 +62,53 @@ impl Deposit {
             amount: U256::from(self.pool.amount_wei),
         };
 
-        Some(
-            TransactionRequest::default()
-                .with_to(address)
-                .input(approve_call.abi_encode().into()),
-        )
+        Some(Call {
+            target: address,
+            value: U256::ZERO,
+            input: approve_call.abi_encode().into(),
+        })
     }
 }
 
 impl From<Deposit> for TransactionRequest {
     fn from(deposit: Deposit) -> Self {
-        TransactionRequest::default()
-            .with_to(deposit.target())
-            .with_value(deposit.value())
-            .input(deposit.input().into())
+        deposit.deposit_data().into()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use alloy::primitives::B256;
+
+    use super::*;
+
+    #[test]
+    fn native_deposit_call_contains_denomination_and_commitment() {
+        let deposit = Deposit::new(&Pool::ETHEREUM_ETHER_01, Note::new([1; 31], [2; 31]));
+        let call = deposit.deposit_data();
+
+        assert_eq!(call.target, deposit.pool.address);
+        assert_eq!(call.value, U256::from(deposit.pool.amount_wei));
+        let input = Tornado::depositCall::abi_decode(&call.input).unwrap();
+        assert_eq!(input._commitment, B256::from(deposit.note.commitment()));
+        assert!(deposit.approval_data().is_none());
+    }
+
+    #[test]
+    fn erc20_calls_target_pool_and_token_with_zero_native_value() {
+        let deposit = Deposit::new(&Pool::ETHEREUM_DAI_100, Note::new([1; 31], [2; 31]));
+        let call = deposit.deposit_data();
+        let approval = deposit.approval_data().unwrap();
+        let Asset::Erc20 { address, .. } = deposit.pool.asset else {
+            panic!("expected an ERC20 asset");
+        };
+
+        assert_eq!(call.target, deposit.pool.address);
+        assert_eq!(call.value, U256::ZERO);
+        assert_eq!(approval.target, address);
+        assert_eq!(approval.value, U256::ZERO);
+        let input = ERC20::approveCall::abi_decode(&approval.input).unwrap();
+        assert_eq!(input.spender, deposit.pool.address);
+        assert_eq!(input.amount, U256::from(deposit.pool.amount_wei));
     }
 }

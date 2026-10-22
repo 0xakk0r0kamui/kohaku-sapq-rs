@@ -6,6 +6,11 @@ Rust [Tornadocash](https://tornadocash.eth.limo/) client library, designed to in
 - Merkle tree construction and proof generation
 - Relayed and paymaster-sponsored withdrawal transactions
 
+`Deposit::deposit_data()`, `Deposit::approval_data()` and `ProvenWithdrawal::data()`
+prepare `Call` values with a target address, native value and encoded input.
+Native deposits have no approval call. A `Call` can be converted into Alloy's
+`TransactionRequest` for signing and submission.
+
 ## Examples
 
 ### Deposit
@@ -23,10 +28,10 @@ let deposit = Deposit::new(&Pool::SEPOLIA_ETHER_01, rng.random());
 let note = deposit.note.clone();
     
 // ERC20 pools require approval for at least the deposit amount.
-if let Some(approval) = deposit.approval() {
-    provider.send_transaction(approval).await?.watch().await?;
+if let Some(approval) = deposit.approval_data() {
+    provider.send_transaction(approval.into()).await?.watch().await?;
 }
-provider.send_transaction(deposit.into()).await?.watch().await?;
+provider.send_transaction(deposit.deposit_data().into()).await?.watch().await?;
 
 # Ok(())
 # }
@@ -63,7 +68,7 @@ let merkle_proof = tree.leaf_proof(note.commitment())?;
 let withdrawal = Withdrawal::new(&pool, note, recipient)
     .prove(&merkle_proof, rng)?;
 
-provider.send_transaction(withdrawal.into()).await?.watch().await?;
+provider.send_transaction(withdrawal.data().into()).await?.watch().await?;
 
 # Ok(())
 # }
