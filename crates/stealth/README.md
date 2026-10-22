@@ -6,8 +6,21 @@ Announcements use [ERC-5564](https://eips.ethereum.org/EIPS/eip-5564).
 
 ## Announcements
 
-Get the recipient's meta-address directly or look it up with
-`contracts::resolve_meta_address`. An empty registry entry returns `Ok(None)`.
+Decode the recipient's meta-address:
+
+```rust
+use kohaku_stealth::{SchemeId3, StealthMetaAddress, StealthScheme};
+
+fn parse_recipient(bytes: &[u8]) -> Option<StealthMetaAddress> {
+    SchemeId3::meta_from_bytes(bytes)
+}
+```
+
+To look it up in ERC-6538, import `StealthProviderExt` and call
+`provider.resolve_meta_address(&deployment, registrant).await`. This returns
+`Ok(None)` if no meta-address is registered.
+
+Generate a stealth address and prepare its announcement transaction:
 
 ```rust,no_run
 use alloy::{primitives::Address, rpc::types::TransactionRequest};
@@ -27,31 +40,45 @@ fn example(
 }
 ```
 
-Submit the unsigned `transaction` with Alloy and confirm success before funding
-`address`. Retry failed funding to the same address. Save each transaction hash
-before waiting for a receipt; after a timeout, check its status before resending.
+Sign and send `transaction` with Alloy. After it succeeds, fund `address`.
+If funding fails, retry to the same address. Save each transaction hash before
+waiting for a receipt. After a timeout, check its status before resending.
 
 ## Scanning
 
-Create a scanner with `Scheme3Account::scanner`. For watch-only scanning, use
-`scheme3::bind_scanner` with the tracking key and meta-address.
+Create a scanner with `Account::scanner`. To scan with only the tracking key and
+meta-address, import `StealthScheme` and call `SchemeId3::bind`.
 
 ```rust,no_run
-use alloy::providers::Provider;
+use alloy::{
+    providers::ProviderBuilder,
+    rpc::client::RpcClient,
+    transports::layers::RetryBackoffLayer,
+};
 use futures::{TryStreamExt, pin_mut};
 use kohaku_stealth::{
-    Deployment, FetchConfig, FetchError, ScanEvent, Scanner, get_announcements,
+    Deployment, ScanEvent, Scanner, StreamedEventConfig, get_announcements,
     get_announcements_for_user,
 };
 
 async fn receive(
-    provider: &impl Provider,
+    rpc_url: &str,
     deployment: Deployment,
     scanner: &Scanner,
     from_block: u64,
-) -> Result<(), FetchError> {
+) -> Result<(), Box<dyn std::error::Error>> {
+    let client = RpcClient::builder()
+        .layer(RetryBackoffLayer::new(3, 250, 1_000))
+        .http(rpc_url.parse()?);
+    let provider = ProviderBuilder::new().connect_client(client);
     let announcements = get_announcements(
-        provider, deployment, from_block..=u64::MAX, FetchConfig::default(),
+        &provider,
+        deployment,
+        from_block..=u64::MAX,
+        StreamedEventConfig {
+            max_retries: 0,
+            ..Default::default()
+        },
     );
     let events = get_announcements_for_user(scanner, announcements);
     pin_mut!(events);
@@ -59,7 +86,7 @@ async fn receive(
     while let Some(event) = events.try_next().await? {
         match event {
             ScanEvent::Match(matched) => {
-                println!("{} in {}", matched.stealth_address(), matched.record().transaction_hash());
+                println!("{} in {}", matched.stealth_address(), matched.record.transaction_hash);
             }
             ScanEvent::RangeScanned { range, rejected_logs } => {
                 println!("scanned {range:?}; rejected {rejected_logs} malformed payloads");
@@ -70,31 +97,31 @@ async fn receive(
 }
 ```
 
-Matches identify announcements for the scanner; check funding separately.
-The stream scans through the finalized head read on the first poll. Start at the
-announcer's deployment block unless you know when the recipient's keys were first
-used. Payments can precede registration.
+Scanning stops at the finalized block. Start at the announcer's deployment block
+unless you know when the recipient's keys were first used. Check funding separately.
 
-Save matches before checkpointing a range at `RangeScanned`. On error or
-cancellation, replay the unfinished range and deduplicate by chain, announcer,
-block hash, and log index. See `FetchConfig` for batch size and concurrency
-settings.
+Save matches before recording the completed range from `RangeScanned`.
+Rescan unfinished ranges and skip logs already saved.
+
+The example uses Alloy for retries. Keep `StreamedEventConfig.max_retries = 0`
+on browsers. Native retries need a Tokio runtime with time enabled. Retry limits
+apply per RPC request; failed ranges may be split and queried again.
 
 ## Keys
 
 Store `AccountSeed` in a wallet keystore. Restore the account with
-`Scheme3Account::from_seed`, then derive a spend key from a matched address.
+`Account::from_seed`, then derive a spend key from a matched address.
 With Alloy's `signer-local` feature:
 
 ```rust,no_run
 use alloy::signers::local::PrivateKeySigner;
-use kohaku_stealth::{ExposeSecret, MatchedStealthAddress, Scheme3Account};
+use kohaku_stealth::{Account, ExposeSecret, MatchedStealthAddress};
 
 fn example(
-    account: &Scheme3Account,
+    account: &Account,
     matched: &MatchedStealthAddress,
 ) -> Result<PrivateKeySigner, Box<dyn std::error::Error>> {
-    let key = matched.spend_key(account)?;
+    let key = account.spend_key(&matched.match_result)?;
     let signer = PrivateKeySigner::from_slice(key.expose_secret())?;
     Ok(signer)
 }
@@ -103,9 +130,13 @@ fn example(
 `AccountSeed` and `SpendKey` clear their buffers on drop. A signer may keep its
 own copy of the key.
 
-`generate_stealth_address_with_seed` takes a 64-byte seed. Reusing a seed repeats
+`SchemeId3::announce` takes a 64-byte seed. Reusing a seed repeats
 the ephemeral key and, for the same recipient, the stealth address. Use
 `generate_stealth_address` with an RNG for new payments.
+
+Import `StealthScheme` to call `SchemeId3` methods such as `bind`, `scan`,
+`spend_key` and `meta_from_bytes`. Methods returning `Result` use `EngineError`;
+account and RNG helpers use `SchemeError`.
 
 ## Tests
 

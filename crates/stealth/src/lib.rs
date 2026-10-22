@@ -1,16 +1,19 @@
 #![doc = include_str!("../README.md")]
 
+mod abis;
 pub mod contracts;
+mod provider;
 pub mod scan;
 pub mod scheme3;
 pub mod syncer;
 
 pub use contracts::Deployment;
+pub use kohaku_rpc_provider::StreamedEventConfig;
+pub use provider::{ContractError, StealthProviderExt};
 pub use scan::{MatchedStealthAddress, ScanEvent, get_announcements_for_user, scan_record};
 pub use scheme3::{
-    AccountSeed, DerivedScheme3Account, EngineError, ExposeSecret, Master, Match, SCHEME_ID,
-    Scanner, Scheme3Account, SchemeError, SpendKey, StealthAddress, StealthMetaAddress, Tracking,
-    compute_stealth_spend_key, generate_stealth_address, generate_stealth_address_with_seed,
-    scan_announcement,
+    Account, AccountSeed, DerivedAccount, EngineError, ExposeSecret, Master, Match, Scanner,
+    SchemeError, SchemeId3, SpendKey, StealthAddress, StealthMetaAddress, StealthScheme, Tracking,
+    generate_stealth_address,
 };
-pub use syncer::{AnnouncementRecord, FetchConfig, FetchError, FetchEvent, get_announcements};
+pub use syncer::{AnnouncementRecord, FetchError, FetchEvent, get_announcements};

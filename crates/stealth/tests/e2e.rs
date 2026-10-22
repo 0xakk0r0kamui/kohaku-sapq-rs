@@ -12,18 +12,17 @@ use alloy::{
 };
 use futures::{TryStreamExt, pin_mut, stream};
 use kohaku_stealth::{
-    AccountSeed, Deployment, ExposeSecret, FetchConfig, FetchError, FetchEvent, SCHEME_ID,
-    ScanEvent, Scheme3Account, SchemeError,
-    contracts::{
-        IERC5564Announcer, IERC6538Registry, prepare_announcement, prepare_registration,
-        prepare_registration_on_behalf, resolve_meta_address,
-    },
-    generate_stealth_address, generate_stealth_address_with_seed, get_announcements,
-    get_announcements_for_user,
+    Account, AccountSeed, Deployment, ExposeSecret, FetchError, FetchEvent, ScanEvent, SchemeError,
+    SchemeId3, StealthProviderExt, StealthScheme, StreamedEventConfig,
+    contracts::{prepare_announcement, register_keys, register_keys_on_behalf},
+    generate_stealth_address, get_announcements, get_announcements_for_user,
 };
-use pqsa_core::{SenderState, StealthScheme};
-use pqsa_per_payment::SchemeId3;
+use pqsa_core::SenderState;
 use rand::{SeedableRng, rngs::StdRng};
+
+#[path = "../src/abis.rs"]
+mod abis;
+use abis::{IERC5564Announcer, IERC6538Registry};
 
 #[path = "fixtures/mod.rs"]
 mod fixtures;
@@ -80,21 +79,23 @@ async fn receive_and_spend() -> anyhow::Result<()> {
     };
     let fixture = fixtures::Payment::load();
     let account = fixture.account();
-    assert_eq!(fixture.scheme_id, SCHEME_ID);
+    assert_eq!(fixture.scheme_id, SchemeId3::SCHEME_ID);
     assert!(
-        resolve_meta_address(&provider, &deployment, recipient.address())
+        provider
+            .resolve_meta_address(&deployment, recipient.address())
             .await?
             .is_none()
     );
 
     let registration_receipt = recipient_provider
-        .send_transaction(prepare_registration(&deployment, account.meta_address()))
+        .send_transaction(register_keys(&deployment, account.meta_address()))
         .await?
         .get_receipt()
         .await?;
     assert!(registration_receipt.status());
     assert_eq!(registration_receipt.from, recipient.address());
-    let registered = resolve_meta_address(&provider, &deployment, recipient.address())
+    let registered = provider
+        .resolve_meta_address(&deployment, recipient.address())
         .await?
         .expect("meta-address was registered");
     assert_eq!(
@@ -105,7 +106,7 @@ async fn receive_and_spend() -> anyhow::Result<()> {
     let seed = SenderState::resume(&[0x5a; 32], 0)
         .draw_seed::<SchemeId3>()
         .map_err(SchemeError::from)?;
-    let announcement = generate_stealth_address_with_seed(&registered, &seed)?;
+    let announcement = SchemeId3::announce(&registered, &seed).map_err(SchemeError::from)?;
     let published = fixture.announcement();
     assert_eq!(
         SchemeId3::announcement_to_bytes(&announcement),
@@ -133,7 +134,7 @@ async fn receive_and_spend() -> anyhow::Result<()> {
 
     let mut rng = StdRng::from_seed([0x52; 32]);
     let other_seed = AccountSeed::generate(&mut rng);
-    let other_account = Scheme3Account::from_seed(other_seed.expose_secret())?;
+    let other_account = Account::from_seed(other_seed.expose_secret())?;
     let other_announcement = generate_stealth_address(other_account.meta_address(), &mut rng)?;
     let foreign_receipt = provider
         .send_transaction(prepare_announcement(&deployment, &other_announcement))
@@ -143,9 +144,9 @@ async fn receive_and_spend() -> anyhow::Result<()> {
     assert!(foreign_receipt.status());
 
     for (scheme_id, metadata) in [
-        (SCHEME_ID + 1, fixture.metadata.to_vec()),
+        (SchemeId3::SCHEME_ID + 1, fixture.metadata.to_vec()),
         (
-            SCHEME_ID,
+            SchemeId3::SCHEME_ID,
             fixture.metadata[..fixture.metadata.len() - 1].to_vec(),
         ),
     ] {
@@ -183,9 +184,14 @@ async fn receive_and_spend() -> anyhow::Result<()> {
 
     // Advance past the announcements before fetching finalized logs.
     provider.anvil_mine(Some(64), None).await?;
-    let fetched = get_announcements(&provider, deployment, 0..=u64::MAX, FetchConfig::default())
-        .try_collect::<Vec<_>>()
-        .await?;
+    let fetched = get_announcements(
+        &provider,
+        deployment,
+        0..=u64::MAX,
+        StreamedEventConfig::default(),
+    )
+    .try_collect::<Vec<_>>()
+    .await?;
     assert_eq!(
         fetched
             .iter()
@@ -223,7 +229,7 @@ async fn receive_and_spend() -> anyhow::Result<()> {
     assert_eq!(matches.len(), 2);
     assert_eq!(matches[0].stealth_address(), fixture.stealth_address);
     assert_eq!(
-        matches[0].record().transaction_hash(),
+        matches[0].record.transaction_hash,
         announcement_receipt.transaction_hash
     );
     assert_eq!(
@@ -231,11 +237,11 @@ async fn receive_and_spend() -> anyhow::Result<()> {
         Address::from(unfunded_announcement.stealth_address)
     );
     assert_eq!(
-        matches[1].record().transaction_hash(),
+        matches[1].record.transaction_hash,
         unfunded_receipt.transaction_hash
     );
 
-    let private_key = matches[0].spend_key(&account)?;
+    let private_key = account.spend_key(&matches[0].match_result)?;
     assert_eq!(
         private_key.expose_secret().as_slice(),
         fixture.spend_key.as_ref()
@@ -293,12 +299,13 @@ async fn registration_on_behalf() -> anyhow::Result<()> {
     let fixture = fixtures::Payment::load();
     let meta_address = SchemeId3::meta_from_bytes(&fixture.meta_address).unwrap();
     assert!(
-        resolve_meta_address(&provider, &deployment, registrant.address())
+        provider
+            .resolve_meta_address(&deployment, registrant.address())
             .await?
             .is_none()
     );
     let entry = Erc6538RegistryEntry {
-        schemeId: U256::from(SCHEME_ID),
+        schemeId: U256::from(SchemeId3::SCHEME_ID),
         stealthMetaAddress: fixture.meta_address.clone(),
         nonce: registry.nonceOf(registrant.address()).call().await?,
     };
@@ -313,7 +320,7 @@ async fn registration_on_behalf() -> anyhow::Result<()> {
         registry.DOMAIN_SEPARATOR().call().await?
     );
     let signature = registrant.sign_hash_sync(&entry.eip712_signing_hash(&domain))?;
-    let transaction = prepare_registration_on_behalf(
+    let transaction = register_keys_on_behalf(
         &deployment,
         registrant.address(),
         &signature.as_bytes(),
@@ -326,7 +333,8 @@ async fn registration_on_behalf() -> anyhow::Result<()> {
         .await?;
     assert!(receipt.status());
     assert_eq!(receipt.from, relayer.address());
-    let registered = resolve_meta_address(&provider, &deployment, registrant.address())
+    let registered = provider
+        .resolve_meta_address(&deployment, registrant.address())
         .await?
         .expect("meta-address was registered on behalf");
     assert_eq!(
@@ -334,7 +342,8 @@ async fn registration_on_behalf() -> anyhow::Result<()> {
         fixture.meta_address.as_ref()
     );
     assert!(
-        resolve_meta_address(&provider, &deployment, relayer.address())
+        provider
+            .resolve_meta_address(&deployment, relayer.address())
             .await?
             .is_none()
     );

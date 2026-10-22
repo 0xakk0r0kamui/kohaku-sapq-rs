@@ -1,7 +1,5 @@
 use alloy::primitives::{Address, Bytes};
-use kohaku_stealth::{Scheme3Account, StealthAddress};
-use pqsa_core::StealthScheme;
-use pqsa_per_payment::SchemeId3;
+use kohaku_stealth::{Account, SchemeId3, StealthAddress, StealthScheme};
 use serde::Deserialize;
 
 #[derive(Deserialize)]
@@ -19,10 +17,10 @@ impl Payment {
         serde_json::from_str(include_str!("payment.json")).unwrap()
     }
 
-    pub fn account(&self) -> Scheme3Account {
+    pub fn account(&self) -> Account {
         // The seed used by upstream's emit_payment_json example.
         let seed: [u8; 128] = std::array::from_fn(|i| (i as u8).wrapping_mul(7).wrapping_add(3));
-        let account = Scheme3Account::from_seed(&seed).unwrap();
+        let account = Account::from_seed(&seed).unwrap();
         assert_eq!(
             SchemeId3::meta_to_bytes(account.meta_address()),
             self.meta_address.as_ref()
