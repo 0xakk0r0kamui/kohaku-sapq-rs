@@ -66,14 +66,25 @@ impl Asset {
     };
 
     #[must_use]
-    pub fn symbol(&self) -> &str {
+    pub const fn address(&self) -> Option<Address> {
         match self {
-            Asset::Native { symbol, .. } | Asset::Erc20 { symbol, .. } => symbol,
+            Asset::Native { .. } => None,
+            Asset::Erc20 { address, .. } => Some(*address),
         }
     }
 
     #[must_use]
-    pub fn decimals(&self) -> u8 {
+    pub const fn symbol(&self) -> &str {
+        match self {
+            Asset::Native { symbol, .. } | Asset::Erc20 { symbol, .. } => match symbol {
+                Cow::Borrowed(s) => s,
+                Cow::Owned(s) => s.as_str(),
+            },
+        }
+    }
+
+    #[must_use]
+    pub const fn decimals(&self) -> u8 {
         match self {
             Asset::Native { decimals, .. } | Asset::Erc20 { decimals, .. } => *decimals,
         }

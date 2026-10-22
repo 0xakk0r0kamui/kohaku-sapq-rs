@@ -294,7 +294,7 @@ impl Pool {
         paymaster: None,
     };
 
-    /// Creates a pool from the note's pool hints. Returns `None` if the note's pool is not known.
+    /// Creates a pool from the note's pool hints.
     #[must_use]
     pub fn from_note(note: &NoteString) -> Option<Self> {
         Pool::POOLS
@@ -307,7 +307,7 @@ impl Pool {
             .cloned()
     }
 
-    /// Creates a pool from the provided address. Returns `None` if the pool is not known.
+    /// Creates a pool from the provided address.
     #[must_use]
     pub fn from_address(address: Address) -> Option<Self> {
         Pool::POOLS
