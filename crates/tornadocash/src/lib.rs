@@ -2,6 +2,7 @@
 
 mod abis;
 mod asset;
+mod call;
 mod crypto;
 mod deposit;
 mod field;
@@ -17,6 +18,7 @@ mod withdrawal;
 pub mod userop_provider;
 
 pub use asset::Asset;
+pub use call::Call;
 pub use deposit::Deposit;
 pub use field::Field;
 pub use note::{Note, NoteError, NoteString, Nullifier, Secret};

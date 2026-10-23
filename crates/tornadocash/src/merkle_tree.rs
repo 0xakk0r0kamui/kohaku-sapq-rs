@@ -28,7 +28,7 @@ pub trait MerkleTreeExt {
     fn splice_events(&mut self, events: &[SyncEvent]) -> Result<(), MerkleTreeError>;
 }
 
-/// MiMC sponge hasher for Tornado Cash Merkle tree.
+/// `MiMC` sponge hasher for Tornado Cash Merkle tree.
 ///
 /// Reference implementation:
 /// [contracts/Classic/MerkleTreeWithHistory.sol](https://github.com/tornado-dao/tornado-contracts/blob/cc57528ae13e762c36ae715f37e018528d6e0605/contracts/Classic/MerkleTreeWithHistory.sol#L57)
