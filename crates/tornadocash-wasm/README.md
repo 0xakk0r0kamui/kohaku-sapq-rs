@@ -1,8 +1,8 @@
 # kohaku-tornadocash-wasm
 
 JavaScript/TypeScript bindings for `kohaku-tornadocash`. This crate houses the
-bindings for the core's public API, currently covering notes, assets, known pools
-and deposit preparation.
+bindings for the core's public API, currently covering notes, assets, known pools,
+deposit preparation and supplied-log decoding.
 The wrappers follow the Rust API; wasm-bindgen and tsify stay in this crate.
 
 ## Available bindings
@@ -201,6 +201,11 @@ try {
 `Deposit` exposes `depositData()` and `approvalData()` to prepare plain `Call`
 objects from a `Pool` and `Note`. See the [deposit guide](docs/deposits.md) for the
 API, ownership and a short usage example.
+
+### Event decoding
+
+`decodeEvent` decodes caller-supplied Tornado logs into deposit or withdrawal
+events. See the [event guide](docs/events.md) for a short usage example.
 
 ## Build
 
