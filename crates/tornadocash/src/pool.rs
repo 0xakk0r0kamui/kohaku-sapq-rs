@@ -307,15 +307,6 @@ impl Pool {
             .cloned()
     }
 
-    /// Creates a pool from the provided address.
-    #[must_use]
-    pub fn from_address(address: Address) -> Option<Self> {
-        Pool::POOLS
-            .iter()
-            .find(|pool| pool.address == address)
-            .cloned()
-    }
-
     /// Pool ID, e.g. "eth-0.1-1" for the 0.1 ETH pool on Ethereum mainnet.
     #[must_use]
     pub fn id(&self) -> String {

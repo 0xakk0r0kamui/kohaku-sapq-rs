@@ -1,4 +1,4 @@
-use std::{fmt::Display, ops::Deref, str::FromStr};
+use std::{fmt::Display, str::FromStr};
 
 use rand::{
     RngExt,
@@ -101,6 +101,21 @@ impl NoteString {
             chain_id: pool.chain_id,
         }
     }
+
+    #[must_use]
+    pub fn preimage(&self) -> [u8; 62] {
+        self.note.preimage()
+    }
+
+    #[must_use]
+    pub fn commitment(&self) -> Field {
+        self.note.commitment()
+    }
+
+    #[must_use]
+    pub fn nullifier_hash(&self) -> Field {
+        self.note.nullifier_hash()
+    }
 }
 
 impl Distribution<Note> for StandardUniform {
@@ -120,7 +135,7 @@ impl Display for NoteString {
             self.symbol,
             self.amount,
             self.chain_id,
-            hex::encode(self.preimage())
+            hex::encode(self.note.preimage())
         )
     }
 }
@@ -156,14 +171,6 @@ impl FromStr for NoteString {
             amount,
             chain_id,
         ))
-    }
-}
-
-impl Deref for NoteString {
-    type Target = Note;
-
-    fn deref(&self) -> &Self::Target {
-        &self.note
     }
 }
 

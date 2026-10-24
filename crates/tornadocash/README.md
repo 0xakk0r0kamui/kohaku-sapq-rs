@@ -28,10 +28,10 @@ let deposit = Deposit::new(&Pool::SEPOLIA_ETHER_01, rng.random());
 let note = deposit.note.clone();
     
 // ERC20 pools require approval for at least the deposit amount.
-if let Some(approval) = deposit.approval_data() {
+if let Some(approval) = deposit.approval() {
     provider.send_transaction(approval.into()).await?.watch().await?;
 }
-provider.send_transaction(deposit.deposit_data().into()).await?.watch().await?;
+provider.send_transaction(deposit.call().into()).await?.watch().await?;
 
 # Ok(())
 # }
@@ -68,7 +68,7 @@ let merkle_proof = tree.leaf_proof(note.commitment())?;
 let withdrawal = Withdrawal::new(&pool, note, recipient)
     .prove(&merkle_proof, rng)?;
 
-provider.send_transaction(withdrawal.data().into()).await?.watch().await?;
+provider.send_transaction(withdrawal.call().into()).await?.watch().await?;
 
 # Ok(())
 # }

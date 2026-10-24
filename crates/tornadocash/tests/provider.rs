@@ -24,7 +24,7 @@ async fn test_deposit() -> Result<(), anyhow::Error> {
     // Deposit a note
     let deposit = Deposit::new(&pool, rand::random());
     provider
-        .send_transaction(deposit.into())
+        .send_transaction(deposit.call().into())
         .await?
         .watch()
         .await?;
@@ -54,7 +54,7 @@ async fn test_withdraw() -> Result<(), anyhow::Error> {
     let deposit = Deposit::new(&pool, rand::random());
     let note = deposit.note.clone();
     provider
-        .send_transaction(deposit.into())
+        .send_transaction(deposit.call().into())
         .await?
         .watch()
         .await?;
@@ -73,7 +73,7 @@ async fn test_withdraw() -> Result<(), anyhow::Error> {
     let withdrawal =
         Withdrawal::new(&pool, note, recipient).prove(&merkle_proof, &mut rand::rng())?;
     provider
-        .send_transaction(withdrawal.into())
+        .send_transaction(withdrawal.call().into())
         .await?
         .watch()
         .await?;

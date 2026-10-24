@@ -51,7 +51,7 @@ async fn test_relayer_withdraw() -> Result<(), anyhow::Error> {
     let deposit = Deposit::new(&pool, rand::random());
     let note = deposit.note.clone();
     provider
-        .send_transaction(deposit.into())
+        .send_transaction(deposit.call().into())
         .await?
         .watch()
         .await?;

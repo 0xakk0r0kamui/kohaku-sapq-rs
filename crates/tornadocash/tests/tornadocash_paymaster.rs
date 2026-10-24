@@ -70,7 +70,7 @@ async fn test_tornadocash_paymaster() -> Result<(), anyhow::Error> {
     let deposit = Deposit::new(&pool, rand::random());
     let note = deposit.note.clone();
     provider
-        .send_transaction(deposit.into())
+        .send_transaction(deposit.call().into())
         .await?
         .watch()
         .await?;
@@ -172,7 +172,7 @@ async fn test_tornadocash_paymaster_flashcall() -> Result<(), anyhow::Error> {
     let deposit = Deposit::new(&pool, rand::random());
     let note = deposit.note.clone();
     provider
-        .send_transaction(deposit.into())
+        .send_transaction(deposit.call().into())
         .await?
         .watch()
         .await?;

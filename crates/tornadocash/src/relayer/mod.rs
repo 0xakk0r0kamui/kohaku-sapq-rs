@@ -182,17 +182,17 @@ impl Relayer {
     /// See <https://github.com/tornado-dao/tornado-relayer/blob/52473197ea49fb70dab8fead01de52545801ca6b/src/contollers/controller.js#L9>
     /// for the reference implementation.
     pub async fn withdraw(&self, withdrawal: ProvenWithdrawal) -> Result<JobReceipt, RelayerError> {
-        let nullifier_hash = withdrawal.note.nullifier_hash();
+        let nullifier_hash = withdrawal.note().nullifier_hash();
         let request = WithdrawRequest {
-            contract: withdrawal.pool.address,
+            contract: withdrawal.pool().address,
             proof: withdrawal.solidity_proof(),
             args: (
-                withdrawal.root.into(),
+                withdrawal.root().into(),
                 nullifier_hash.into(),
-                withdrawal.recipient,
-                withdrawal.payer.address,
-                withdrawal.payer.fee.into(),
-                withdrawal.payer.refund.into(),
+                withdrawal.recipient(),
+                withdrawal.payer().address,
+                withdrawal.payer().fee.into(),
+                withdrawal.payer().refund.into(),
             ),
         };
 
@@ -210,7 +210,7 @@ impl Relayer {
         Ok(JobReceipt {
             id: response.id,
             nullifier_hash,
-            pool: withdrawal.inner.pool,
+            pool: withdrawal.pool().clone(),
         })
     }
 

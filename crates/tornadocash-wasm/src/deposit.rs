@@ -25,18 +25,18 @@ impl Deposit {
 
     /// Return the core's deposit call as plain JavaScript data.
     #[wasm_bindgen(js_name = depositData)]
-    pub fn deposit_data(&self) -> Result<Ts<Call>, JsError> {
-        Ok(Call::from(self.inner.deposit_data()).into_ts()?)
+    pub fn call(&self) -> Result<Ts<Call>, JsError> {
+        Ok(Call::from(self.inner.call()).into_ts()?)
     }
 
     /// Return the core's ERC20 approval call, or undefined for native pools.
     ///
     /// This prepares call data without checking existing allowance.
     #[wasm_bindgen(js_name = approvalData)]
-    pub fn approval_data(&self) -> Result<Option<Ts<Call>>, JsError> {
+    pub fn approval(&self) -> Result<Option<Ts<Call>>, JsError> {
         Ok(self
             .inner
-            .approval_data()
+            .approval()
             .map(|call| Call::from(call).into_ts())
             .transpose()?)
     }
@@ -55,14 +55,14 @@ mod tests {
         for pool in [CorePool::ETHEREUM_ETHER_01, CorePool::ETHEREUM_DAI_100] {
             let (deposit, core) = deposit_fixture(pool);
 
-            assert_call(deposit.deposit_data().unwrap(), core.deposit_data());
+            assert_call(deposit.call().unwrap(), core.call());
         }
     }
 
     #[wasm_bindgen_test]
     fn native_approval_data_is_undefined() {
         let (deposit, _) = deposit_fixture(CorePool::ETHEREUM_ETHER_01);
-        let approval: JsValue = deposit.approval_data().unwrap().into();
+        let approval: JsValue = deposit.approval().unwrap().into();
 
         assert!(approval.is_undefined());
     }
@@ -72,8 +72,8 @@ mod tests {
         let (deposit, core) = deposit_fixture(CorePool::ETHEREUM_DAI_100);
 
         assert_call(
-            deposit.approval_data().unwrap().unwrap(),
-            core.approval_data().unwrap(),
+            deposit.approval().unwrap().unwrap(),
+            core.approval().unwrap(),
         );
     }
 

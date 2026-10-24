@@ -214,12 +214,12 @@ async fn gas_cost<S>(
 fn encode_paymaster_data(adapter: Address, withdrawal: &ProvenWithdrawal) -> Bytes {
     let adapter_data = TornadoAdapterData {
         proof: withdrawal.solidity_proof(),
-        root: withdrawal.root.into(),
-        nullifierHash: withdrawal.note.nullifier_hash().into(),
-        recipient: withdrawal.recipient,
-        relayer: withdrawal.payer.address,
-        fee: withdrawal.payer.fee,
-        refund: withdrawal.payer.refund,
+        root: withdrawal.root().into(),
+        nullifierHash: withdrawal.note().nullifier_hash().into(),
+        recipient: withdrawal.recipient(),
+        relayer: withdrawal.payer().address,
+        fee: withdrawal.payer().fee,
+        refund: withdrawal.payer().refund,
     };
     let data = PaymasterData {
         adapter,
