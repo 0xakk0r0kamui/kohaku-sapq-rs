@@ -333,29 +333,24 @@ impl Display for Pool {
 }
 
 fn format_amount(amount: u128, decimals: u8) -> String {
-    if decimals == 0 {
+    if decimals == 0 || amount == 0 {
         return amount.to_string();
     }
 
-    let divisor = 10u128.pow(u32::from(decimals));
+    // Place the decimal point in text: 10^decimals need not fit in u128.
+    let mut digits = amount.to_string();
+    let decimals = usize::from(decimals);
+    let formatted = if digits.len() > decimals {
+        digits.insert(digits.len() - decimals, '.');
+        digits
+    } else {
+        format!("0.{}{digits}", "0".repeat(decimals - digits.len()))
+    };
 
-    let whole = amount / divisor;
-    let frac = amount % divisor;
-
-    if frac == 0 {
-        return whole.to_string();
-    }
-
-    // Pad fractional part with leading zeros
-    let decimals = decimals as usize;
-    let mut frac_str = format!("{frac:0decimals$}");
-
-    // Trim trailing zeros
-    while frac_str.ends_with('0') {
-        frac_str.pop();
-    }
-
-    format!("{whole}.{frac_str}")
+    formatted
+        .trim_end_matches('0')
+        .trim_end_matches('.')
+        .to_owned()
 }
 
 #[cfg(test)]
@@ -366,5 +361,56 @@ mod tests {
     fn pool_id() {
         let pool = Pool::ETHEREUM_ETHER_01;
         assert_eq!(pool.id(), "eth-0.1-1");
+    }
+
+    #[test]
+    fn amount_preserves_integer_fraction_and_trailing_zero_formatting() {
+        for (amount, decimals, expected) in [
+            (0, 18, "0"),
+            (1000, 0, "1000"),
+            (1000, 3, "1"),
+            (1000, 2, "10"),
+            (1200, 3, "1.2"),
+            (12, 3, "0.012"),
+            (u128::MAX, 38, "3.40282366920938463463374607431768211455"),
+        ] {
+            assert_eq!(format_amount(amount, decimals), expected);
+        }
+    }
+
+    #[test]
+    fn amount_handles_overflowing_decimal_scales_and_trims_fractional_zeros() {
+        assert_eq!(format_amount(0, 255), "0");
+        assert_eq!(
+            format_amount(u128::MAX, 39),
+            "0.340282366920938463463374607431768211455"
+        );
+        for decimals in [39, 255] {
+            assert_eq!(
+                format_amount(1, decimals),
+                format!("0.{}1", "0".repeat(usize::from(decimals) - 1))
+            );
+            assert_eq!(
+                format_amount(10, decimals),
+                format!("0.{}1", "0".repeat(usize::from(decimals) - 2))
+            );
+        }
+    }
+
+    #[test]
+    fn high_decimal_pool_formats_amount() {
+        let pool = Pool {
+            asset: Asset::Native {
+                symbol: "tiny".into(),
+                decimals: 255,
+            },
+            amount_wei: u128::MAX,
+            ..Pool::ETHEREUM_ETHER_01
+        };
+        let expected = format!(
+            "0.{}340282366920938463463374607431768211455",
+            "0".repeat(216)
+        );
+        assert_eq!(pool.amount(), expected);
     }
 }
