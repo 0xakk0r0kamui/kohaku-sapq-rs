@@ -2,7 +2,7 @@
 
 JavaScript/TypeScript bindings for `kohaku-tornadocash`. This crate houses the
 bindings for the core's public API, currently covering notes, assets, known pools,
-deposit preparation and supplied-log decoding.
+deposit preparation, supplied-log decoding and Merkle inclusion.
 The wrappers follow the Rust API; wasm-bindgen and tsify stay in this crate.
 
 ## Available bindings
@@ -206,6 +206,12 @@ API, ownership and a short usage example.
 
 `decodeEvent` decodes caller-supplied Tornado logs into deposit or withdrawal
 events. See the [event guide](docs/events.md) for a short usage example.
+
+### Merkle inclusion
+
+`MerkleTree` builds and updates the canonical Tornado tree from ordered commitments;
+`MerkleProof` verifies inclusion. See the [Merkle guide](docs/merkle.md) for a short
+usage example.
 
 ## Build
 
