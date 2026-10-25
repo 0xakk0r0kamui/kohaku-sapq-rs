@@ -4,7 +4,7 @@
 //! ```no_run
 //! # use alloy::{providers::DynProvider, signers::local::PrivateKeySigner};
 //! # use kohaku_tornadocash::{
-//! #     merkle_tree::MerkleTree,
+//! #     merkle_tree::{MerkleTree, MerkleTreeExt},
 //! #     Note,
 //! #     Pool,
 //! #     Withdrawal,
@@ -33,7 +33,7 @@
 //!
 //! // The note pays for gas, and its remainder is withdrawn to `owner` during validation, so the
 //! // operation's own calls can spend it.
-//! let withdrawal_merkle_proof = tree.leaf_proof(note.commitment())?;
+//! let withdrawal_merkle_proof = tree.note_proof(&note)?;
 //! let withdrawal = Withdrawal::new(&pool, note, owner.address());
 //! let builder = builder
 //!     .with_tornado_paymaster(withdrawal, &withdrawal_merkle_proof, &provider, &bundler, rng)

@@ -4,7 +4,10 @@ use alloy::{
     signers::local::PrivateKeySigner,
 };
 use kohaku_fork_kit::pool::deploy_pool;
-use kohaku_tornadocash::{Deposit, Withdrawal, merkle_tree::MerkleTree};
+use kohaku_tornadocash::{
+    Deposit, Withdrawal,
+    merkle_tree::{MerkleTree, MerkleTreeExt},
+};
 
 #[tokio::test]
 #[ignore = "run with `cargo test --release -- --ignored`"]
@@ -68,7 +71,7 @@ async fn test_withdraw() -> Result<(), anyhow::Error> {
 
     // Withdraw the note
     let recipient: Address = PrivateKeySigner::random().address();
-    let merkle_proof = tree.leaf_proof(note.commitment())?;
+    let merkle_proof = tree.note_proof(&note)?;
     let withdrawal =
         Withdrawal::new(&pool, note, recipient).prove(&merkle_proof, &mut rand::rng())?;
     provider

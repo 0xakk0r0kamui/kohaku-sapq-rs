@@ -15,7 +15,7 @@
 //! #     providers::{DynProvider, Provider},
 //! # };
 //! # use kohaku_tornadocash::{
-//! #     merkle_tree::MerkleTree,
+//! #     merkle_tree::{MerkleTree, MerkleTreeExt},
 //! #     Note,
 //! #     Pool,
 //! #     Withdrawal,
@@ -34,7 +34,7 @@
 //!
 //! let gas_price = provider.get_gas_price().await?;
 //! let payer = relayer.quote(&pool, gas_price, U256::ZERO).await?;
-//! let merkle_proof = tree.leaf_proof(note.commitment())?;
+//! let merkle_proof = tree.note_proof(&note)?;
 //!
 //! let withdrawal = Withdrawal::new(&pool, note, recipient)
 //!     .with_payer(payer)

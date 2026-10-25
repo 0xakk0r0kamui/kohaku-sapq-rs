@@ -1,3 +1,5 @@
+//! Tornadocash event types.
+
 use std::ops::Range;
 
 use alloy::{
@@ -29,12 +31,14 @@ struct RawSnapshot {
     events: Vec<SyncEvent>,
 }
 
+/// A Tornadocash event emitted by the pool.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SyncEvent {
     Deposit(DepositEvent),
     Withdrawal(WithdrawalEvent),
 }
 
+/// An emitted Tornadocash deposit event.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DepositEvent {
     pub commitment: Field,
@@ -42,6 +46,7 @@ pub struct DepositEvent {
     pub block_number: u64,
 }
 
+/// An emitted Tornadocash withdrawal event.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WithdrawalEvent {
     pub to: Address,

@@ -63,7 +63,7 @@ provider.send_transaction(deposit.call().into()).await?.watch().await?;
 let mut tree = MerkleTree::new();
 tree.splice_events(snapshot.events())?;
 
-let merkle_proof = tree.leaf_proof(note.commitment())?;
+let merkle_proof = tree.note_proof(&note)?;
 let withdrawal = Withdrawal::new(&pool, note, recipient)
     .prove(&merkle_proof, rng)?;
 

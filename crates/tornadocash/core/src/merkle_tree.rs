@@ -8,6 +8,7 @@ use ark_ff::PrimeField;
 use kohaku_merkle_tree::{MerkleTreeError, hasher::Hasher};
 
 use crate::{
+    Note,
     crypto::mimc::mimc_sponge_hash,
     event::{DepositEvent, SyncEvent},
     field::Field,
@@ -21,6 +22,11 @@ pub type MerkleProof = kohaku_merkle_tree::proof::MerkleProof<20, 2, Field>;
 
 /// `MerkleTree` extension trait for Tornado Cash.
 pub trait MerkleTreeExt {
+    /// Returns the Merkle proof for the given note.
+    ///
+    /// # Errors
+    /// Returns an error if the note is not found in the Merkle tree.
+    fn note_proof(&self, note: &Note) -> Result<MerkleProof, MerkleTreeError>;
     /// Splices the given events into the Merkle tree.
     ///
     /// # Errors
@@ -50,6 +56,10 @@ impl Hasher<2, Field> for TornadoHasher {
 }
 
 impl MerkleTreeExt for MerkleTree {
+    fn note_proof(&self, note: &Note) -> Result<MerkleProof, MerkleTreeError> {
+        self.leaf_proof(note.commitment())
+    }
+
     fn splice_events(&mut self, events: &[SyncEvent]) -> Result<(), MerkleTreeError> {
         let deposits: Vec<&DepositEvent> = events
             .iter()
