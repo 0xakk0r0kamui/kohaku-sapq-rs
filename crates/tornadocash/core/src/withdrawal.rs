@@ -4,6 +4,11 @@ use alloy::{
     primitives::{Address, Bytes},
     sol_types::SolCall,
 };
+use ark_bn254::{
+    G1Affine, G2Affine,
+    g2::{G2_GENERATOR_X, G2_GENERATOR_Y},
+};
+use ark_ff::MontFp;
 use kohaku_tornadocash_circuit::{CircuitInputs, prove};
 use rand::CryptoRng;
 use ruint::aliases::U256;
@@ -118,6 +123,19 @@ impl Withdrawal {
             inner: self,
         })
     }
+
+    /// Builds this withdrawal with a dummy proof.
+    ///
+    /// For gas estimation only. The dummy proof is invalid and will only be accepted by an
+    /// overridden verifier.
+    #[must_use]
+    pub fn prove_dummy(self, merkle_proof: &MerkleProof) -> ProvenWithdrawal {
+        ProvenWithdrawal {
+            root: merkle_proof.root,
+            proof: dummy_proof(),
+            inner: self,
+        }
+    }
 }
 
 impl ProvenWithdrawal {
@@ -206,6 +224,20 @@ fn into_solidity_proof(proof: &Proof) -> Bytes {
     }
 
     proof_bytes.into()
+}
+
+/// Non-zero dummy proof for gas estimation.
+fn dummy_proof() -> Proof {
+    // The point 2*G1
+    let two_g1 = G1Affine::new_unchecked(
+        MontFp!("1368015179489954701390400359078579693043519447331113978918064868415326638035"),
+        MontFp!("9918110051302171585080402603319702774565515993150576347155970296011118125764"),
+    );
+    Proof {
+        a: two_g1,
+        b: G2Affine::new_unchecked(G2_GENERATOR_X, G2_GENERATOR_Y),
+        c: two_g1,
+    }
 }
 
 #[cfg(test)]

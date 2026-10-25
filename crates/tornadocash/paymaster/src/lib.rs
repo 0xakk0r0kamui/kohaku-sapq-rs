@@ -48,12 +48,13 @@
 //! ```
 
 use alloy::{
-    primitives::{Address, Bytes, U256},
+    primitives::{Address, Bytes, U256, address, hex},
     providers::Provider,
+    rpc::types::state::{StateOverride, StateOverridesBuilder},
     sol_types::SolValue,
 };
 use kohaku_tornadocash::{
-    Payer, Pool, ProvenWithdrawal, TornadoProviderExt, Withdrawal, WithdrawalError,
+    Payer, PaymasterInfo, Pool, ProvenWithdrawal, TornadoProviderExt, Withdrawal, WithdrawalError,
     merkle_tree::MerkleProof,
 };
 use kohaku_userop_kit::{
@@ -68,8 +69,11 @@ mod abis;
 /// Safety margin added to the quoted fee, in basis points.
 const FEE_BUFFER_BPS: u128 = 100;
 
-/// Fraction of the denomination offered as the fee for the first gas estimate.
+/// Fraction of the denomination offered as the fee for the gas estimate.
 const SEED_FEE_DENOMINATOR: u64 = 10;
+
+/// Arbitrary mocked address a pool's verifier is moved to during gas estimation.
+const SHADOW_VERIFIER: Address = address!("0x00000000000000000000000000004b6f68616b75");
 
 /// Extension trait for [`UserOperationBuilder`] that pays for an operation with a tornadocash
 /// note.
@@ -102,12 +106,12 @@ pub enum TornadoPaymasterError {
     PoolMissingPaymaster(Pool),
     #[error("Pool denomination cannot cover the operation's gas: {required} > {denomination}")]
     InsufficientDenomination { required: U256, denomination: U256 },
-    #[error("Operation outgrew the proven fee: {required} > {fee}")]
-    InsufficientFee { required: U256, fee: U256 },
     #[error("Bundler error: {0}")]
     Bundler(#[from] kohaku_userop_kit::bundler::BundlerError),
     #[error("Provider error: {0}")]
     Provider(#[from] alloy::contract::Error),
+    #[error("Transport error: {0}")]
+    Transport(#[from] alloy::transports::TransportError),
     #[error("Withdrawal error: {0}")]
     Withdrawal(#[from] WithdrawalError),
     #[error("Merkle tree error: {0}")]
@@ -128,71 +132,93 @@ impl<S> UserOperationPaymasterExt for UserOperationBuilder<S> {
         R: rand::CryptoRng,
         B: Bundler + ?Sized,
     {
-        let pool = withdrawal.pool.clone();
-        let denomination = U256::from(pool.amount_wei);
+        let pool = &withdrawal.pool;
+        let info = pool
+            .paymaster
+            .ok_or_else(|| TornadoPaymasterError::PoolMissingPaymaster(pool.clone()))?;
 
-        //? The paymaster runs the withdrawal before checking the fee, so even this throwaway
-        //? estimate needs a real proof.
-        let seed = denomination / U256::from(SEED_FEE_DENOMINATOR);
-        let builder =
-            estimate_at_fee(self, withdrawal.clone(), seed, merkle_proof, bundler, rng).await?;
+        let (builder, fee) =
+            estimate_fee(self, &withdrawal, info, merkle_proof, provider, bundler).await?;
 
-        let cost = gas_cost(provider, &pool, &builder).await?;
-        let fee = cost + cost * U256::from(FEE_BUFFER_BPS) / U256::from(10_000);
-        if fee > denomination {
-            return Err(TornadoPaymasterError::InsufficientDenomination {
-                required: fee,
-                denomination,
-            });
-        }
-
-        let builder = estimate_at_fee(builder, withdrawal, fee, merkle_proof, bundler, rng).await?;
-
-        //? The proof is bound to `fee`, so a grown estimate can only be refused.
-        let settled = gas_cost(provider, &pool, &builder).await?;
-        if settled > fee {
-            return Err(TornadoPaymasterError::InsufficientFee {
-                required: settled,
+        //? The placeholder costs what a real proof does, so the estimate holds once proven.
+        let proven = withdrawal
+            .with_payer(Payer {
+                address: info.address,
                 fee,
-            });
-        }
+                refund: U256::ZERO,
+            })
+            .prove(merkle_proof, rng)?;
 
-        Ok(builder)
+        Ok(builder
+            .with_paymaster_and_data(info.address, encode_paymaster_data(info.adapter, &proven)))
     }
 }
 
-async fn estimate_at_fee<S, R, B>(
+/// Estimates the operation's gas.
+async fn estimate_fee<S, B>(
     builder: UserOperationBuilder<S>,
-    withdrawal: Withdrawal,
-    fee: U256,
+    withdrawal: &Withdrawal,
+    info: PaymasterInfo,
     merkle_proof: &MerkleProof,
+    provider: &impl Provider,
     bundler: &B,
-    rng: &mut R,
-) -> Result<UserOperationBuilder<S>, TornadoPaymasterError>
+) -> Result<(UserOperationBuilder<S>, U256), TornadoPaymasterError>
 where
-    R: rand::CryptoRng,
     B: Bundler + ?Sized,
 {
-    let pool = withdrawal.pool.clone();
-    let info = pool
-        .paymaster
-        .ok_or(TornadoPaymasterError::PoolMissingPaymaster(pool))?;
+    let pool = &withdrawal.pool;
+    let denomination = U256::from(pool.amount_wei);
 
-    let withdrawal = withdrawal
+    //? The paymaster still checks the fee against the bundler's max cost, and
+    //? the operation's calls may spend what the fee leaves, so the seed fee must
+    //? sit between the two.
+    // TODO: Find a better way to handle this. Maybe override the paymaster to accept any fee?
+    let seed = denomination / U256::from(SEED_FEE_DENOMINATOR);
+    let placeholder = withdrawal
+        .clone()
         .with_payer(Payer {
             address: info.address,
-            fee,
+            fee: seed,
             refund: U256::ZERO,
         })
-        .prove(merkle_proof, rng)?;
+        .prove_dummy(merkle_proof);
 
-    Ok(builder
+    let overrides = verifier_override(provider, pool).await?;
+    let builder = builder
         .with_paymaster_and_data(
             info.address,
-            encode_paymaster_data(info.adapter, &withdrawal),
+            encode_paymaster_data(info.adapter, &placeholder),
         )
-        .with_gas_estimate(bundler, None)
-        .await?)
+        .with_gas_estimate(bundler, Some(&overrides))
+        .await?;
+
+    let cost = gas_cost(provider, pool, &builder).await?;
+    let fee = cost + cost * U256::from(FEE_BUFFER_BPS) / U256::from(10_000);
+    if fee > denomination {
+        return Err(TornadoPaymasterError::InsufficientDenomination {
+            required: fee,
+            denomination,
+        });
+    }
+
+    Ok((builder, fee))
+}
+
+/// Overrides the pool's verifier contract to accept any proof while consuming similar gas.
+///
+/// The forwarder's extra call makes a withdrawal about 3k gas more expensive than with a real
+/// proof, so estimates on err slightly high.
+async fn verifier_override(
+    provider: &impl Provider,
+    pool: &Pool,
+) -> Result<StateOverride, TornadoPaymasterError> {
+    let verifier = provider.verifier(pool).await?;
+    let code = provider.get_code_at(verifier).await?;
+
+    Ok(StateOverridesBuilder::default()
+        .with_code(SHADOW_VERIFIER, code)
+        .with_code(verifier, forwarder(SHADOW_VERIFIER))
+        .build())
 }
 
 /// Quotes the operation's maximum gas cost in the pool's fee token.
@@ -225,4 +251,18 @@ fn encode_paymaster_data(adapter: Address, withdrawal: &ProvenWithdrawal) -> Byt
     };
 
     data.abi_encode().into()
+}
+
+/// Execution code that calls `target`, discards the outcome, and returns `true`.
+fn forwarder(target: Address) -> Bytes {
+    [
+        // calldatacopy(0, 0, calldatasize)
+        // staticcall(gas, target, 0, calldatasize, 0, 0)
+        &hex!("3660006000376000600036600073")[..],
+        target.as_slice(),
+        // pop the call's success; mstore(0, 1); return(0, 32)
+        &hex!("5afa50600160005260206000f3"),
+    ]
+    .concat()
+    .into()
 }

@@ -1,4 +1,4 @@
-use alloy::providers::Provider;
+use alloy::{primitives::Address, providers::Provider};
 use ruint::aliases::U256;
 
 use crate::{abis::tornado::Tornado, asset::Asset, field::Field, pool::Pool};
@@ -36,6 +36,12 @@ pub trait TornadoProviderExt: Provider {
         pool: &Pool,
         wei_amount: U256,
     ) -> impl Future<Output = Result<U256, alloy::contract::Error>>;
+
+    /// Returns the address of the contract that verifies the pool's withdrawal proofs.
+    fn verifier(
+        &self,
+        pool: &Pool,
+    ) -> impl Future<Output = Result<Address, alloy::contract::Error>>;
 }
 
 impl<P: Provider> TornadoProviderExt for P {
@@ -87,5 +93,9 @@ impl<P: Provider> TornadoProviderExt for P {
                     .await
             }
         }
+    }
+
+    async fn verifier(&self, pool: &Pool) -> Result<Address, alloy::contract::Error> {
+        Tornado::new(pool.address, self).verifier().call().await
     }
 }

@@ -25,5 +25,8 @@ sol!(
 
         // @dev Whether the root is present in the root history
         function isKnownRoot(bytes32 _root) public view returns(bool);
+
+        // @dev The contract that verifies withdrawal proofs
+        function verifier() external view returns (address);
     }
 );
