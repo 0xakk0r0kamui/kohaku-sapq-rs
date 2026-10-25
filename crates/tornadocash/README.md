@@ -48,21 +48,20 @@ provider.send_transaction(deposit.call().into()).await?.watch().await?;
 #     merkle_tree::{MerkleTree, MerkleTreeExt},
 #     Note,
 #     Pool,
-#     syncer::{DynSyncer, Syncer},
+#     event::Snapshot,
 #     Withdrawal,
 # };
 # 
 # async fn example(
 #     provider: DynProvider,
-#     syncer: &DynSyncer,
+#     snapshot: &Snapshot,
 #     pool: Pool,
 #     note: Note,
 #     recipient: Address,
 #     rng: &mut impl rand::CryptoRng,
 # ) -> Result<(), Box<dyn std::error::Error>> {
 let mut tree = MerkleTree::new();
-let snapshot = syncer.sync(&pool, ..).await?;
-tree.splice_events(&snapshot.events)?;
+tree.splice_events(snapshot.events())?;
 
 let merkle_proof = tree.leaf_proof(note.commitment())?;
 let withdrawal = Withdrawal::new(&pool, note, recipient)

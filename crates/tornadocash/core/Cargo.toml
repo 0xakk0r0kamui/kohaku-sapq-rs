@@ -1,0 +1,49 @@
+[package]
+name = "kohaku-tornadocash"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["rlib"]
+
+[features]
+default = []
+parallel = ["kohaku-tornadocash-circuit/parallel"]
+
+[dependencies]
+alloy = { workspace = true, features = [
+    "rpc",
+    "rpc-types",
+    "network",
+    "providers",
+    "sol-types",
+] }
+ark-bn254 = { workspace = true }
+ark-ff = { workspace = true }
+blake-hash = { workspace = true }
+hex = { workspace = true }
+kohaku-merkle-tree = { workspace = true }
+kohaku-tornadocash-circuit = { workspace = true }
+num-bigint = { workspace = true }
+rand = { workspace = true }
+ruint = { workspace = true, features = ["ark-ff-06", "num-bigint"] }
+serde = { workspace = true, features = ["derive"] }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["rt", "time"] }
+websnark-rs = { workspace = true }
+
+[dev-dependencies]
+alloy = { workspace = true, features = [
+    "signers",
+    "signer-local",
+    "provider-anvil-node",
+] }
+anyhow = { workspace = true }
+insta = { workspace = true }
+kohaku-fork-kit = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["macros", "process"] }
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
+
+[lints]
+workspace = true

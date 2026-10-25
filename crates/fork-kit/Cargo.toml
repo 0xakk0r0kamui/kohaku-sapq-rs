@@ -21,6 +21,7 @@ alloy = { workspace = true, features = [
 ] }
 anyhow = { workspace = true }
 kohaku-tornadocash = { workspace = true }
+kohaku-tornadocash-relayer = { workspace = true }
 kohaku-userop-kit = { workspace = true }
 tokio = { workspace = true, features = ["process", "rt-multi-thread"] }
 tracing = { workspace = true }

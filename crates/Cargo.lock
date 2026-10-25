@@ -4536,6 +4536,7 @@ dependencies = [
  "alloy",
  "anyhow",
  "kohaku-tornadocash",
+ "kohaku-tornadocash-relayer",
  "kohaku-userop-kit",
  "tokio",
  "tracing",
@@ -4585,27 +4586,19 @@ dependencies = [
  "anyhow",
  "ark-bn254",
  "ark-ff 0.6.0",
- "async-trait",
  "blake-hash",
- "cfg_aliases",
- "flate2",
  "hex",
  "insta",
  "kohaku-fork-kit",
  "kohaku-merkle-tree",
- "kohaku-rpc-provider",
  "kohaku-tornadocash-circuit",
- "kohaku-userop-kit",
  "num-bigint 0.5.1",
  "rand 0.10.2",
- "reqwest 0.13.4",
  "ruint",
  "serde",
  "serde_json",
- "sha2 0.10.9",
  "thiserror 2.0.20",
  "tokio",
- "tracing",
  "tracing-subscriber",
  "websnark-rs",
 ]
@@ -4638,10 +4631,75 @@ dependencies = [
 ]
 
 [[package]]
+name = "kohaku-tornadocash-paymaster"
+version = "0.1.0"
+dependencies = [
+ "alloy",
+ "anyhow",
+ "cfg_aliases",
+ "insta",
+ "kohaku-fork-kit",
+ "kohaku-merkle-tree",
+ "kohaku-tornadocash",
+ "kohaku-tornadocash-syncer",
+ "kohaku-userop-kit",
+ "rand 0.10.2",
+ "thiserror 2.0.20",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "kohaku-tornadocash-relayer"
+version = "0.1.0"
+dependencies = [
+ "alloy",
+ "anyhow",
+ "cfg_aliases",
+ "insta",
+ "kohaku-fork-kit",
+ "kohaku-tornadocash",
+ "kohaku-tornadocash-syncer",
+ "rand 0.10.2",
+ "reqwest 0.13.4",
+ "ruint",
+ "serde",
+ "thiserror 2.0.20",
+ "tokio",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "kohaku-tornadocash-syncer"
+version = "0.1.0"
+dependencies = [
+ "alloy",
+ "anyhow",
+ "async-trait",
+ "cfg_aliases",
+ "flate2",
+ "hex",
+ "insta",
+ "kohaku-fork-kit",
+ "kohaku-rpc-provider",
+ "kohaku-tornadocash",
+ "reqwest 0.13.4",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "thiserror 2.0.20",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "kohaku-tornadocash-wasm"
 version = "0.1.0"
 dependencies = [
  "alloy",
+ "getrandom 0.2.17",
  "getrandom 0.4.3",
  "hex",
  "js-sys",

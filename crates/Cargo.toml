@@ -4,10 +4,13 @@ members = [
     "merkle-tree",
     "rpc-provider",
     "tor-rpc",
-    "tornadocash",
-    "tornadocash-circuit",
-    "tornadocash-keychain",
-    "tornadocash-wasm",
+    "tornadocash/circuit",
+    "tornadocash/core",
+    "tornadocash/keychain",
+    "tornadocash/paymaster",
+    "tornadocash/relayer",
+    "tornadocash/syncer",
+    "tornadocash/wasm",
     "userop-kit",
 ]
 resolver = "3"
@@ -39,9 +42,12 @@ kohaku-fork-kit = { path = "fork-kit" }
 kohaku-merkle-tree = { path = "merkle-tree" }
 kohaku-rpc-provider = { path = "rpc-provider" }
 kohaku-tor-rpc = { path = "tor-rpc" }
-kohaku-tornadocash = { path = "tornadocash" }
-kohaku-tornadocash-circuit = { path = "tornadocash-circuit" }
-kohaku-tornadocash-keychain = { path = "tornadocash-keychain" }
+kohaku-tornadocash-circuit = { path = "tornadocash/circuit" }
+kohaku-tornadocash = { path = "tornadocash/core" }
+kohaku-tornadocash-keychain = { path = "tornadocash/keychain" }
+kohaku-tornadocash-paymaster = { path = "tornadocash/paymaster" }
+kohaku-tornadocash-relayer = { path = "tornadocash/relayer" }
+kohaku-tornadocash-syncer = { path = "tornadocash/syncer" }
 kohaku-userop-kit = { path = "userop-kit" }
 num-bigint = "0.5.1"
 num-traits = "0.2.19"

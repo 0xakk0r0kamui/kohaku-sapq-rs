@@ -1,0 +1,47 @@
+[package]
+name = "kohaku-tornadocash-relayer"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+alloy = { workspace = true, features = [
+    "rpc",
+    "rpc-types",
+    "network",
+    "providers",
+    "transports",
+    "sol-types",
+    "reqwest",
+] }
+kohaku-tornadocash = { workspace = true }
+rand = { workspace = true }
+reqwest = { workspace = true, features = ["rustls"] }
+ruint = { workspace = true, features = ["ark-ff-06", "num-bigint"] }
+serde = { workspace = true, features = ["derive"] }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["rt", "time"] }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread"] }
+
+[build-dependencies]
+cfg_aliases = { workspace = true }
+
+[dev-dependencies]
+alloy = { workspace = true, features = [
+    "signers",
+    "signer-local",
+    "provider-anvil-node",
+] }
+anyhow = { workspace = true }
+insta = { workspace = true }
+kohaku-fork-kit = { workspace = true }
+kohaku-tornadocash-syncer = { workspace = true }
+tokio = { workspace = true, features = ["macros", "process"] }
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
+
+[lints]
+workspace = true
