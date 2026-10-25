@@ -16,6 +16,7 @@ pub struct RpcSyncer<P: Provider> {
 }
 
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 enum RpcSyncerError {
     #[error("Error decoding log: {0}")]
     LogDecodeError(#[from] alloy::sol_types::Error),

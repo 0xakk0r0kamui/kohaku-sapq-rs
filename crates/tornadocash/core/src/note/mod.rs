@@ -5,7 +5,6 @@ use rand::{
     distr::{Distribution, StandardUniform},
 };
 use serde::{Deserialize, Serialize};
-use thiserror::Error;
 
 pub use crate::note::secrets::{Nullifier, Secret};
 use crate::{crypto::pedersen::pedersen_hash, field::Field, pool::Pool};
@@ -38,7 +37,8 @@ pub struct NoteString {
     pub chain_id: u64,
 }
 
-#[derive(Debug, Error)]
+#[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum NoteError {
     #[error("invalid note format")]
     InvalidFormat,

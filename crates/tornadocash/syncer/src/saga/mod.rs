@@ -1,5 +1,4 @@
 use kohaku_tornadocash::{Pool, event::Snapshot};
-use thiserror::Error;
 use tracing::info;
 
 use self::{
@@ -27,7 +26,8 @@ pub struct SagaSyncer {
     base_url: String,
 }
 
-#[derive(Debug, Error)]
+#[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 enum SagaSyncError {
     #[error("HTTP error: {0}")]
     Http(#[from] reqwest::Error),

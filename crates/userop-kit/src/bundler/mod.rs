@@ -1,5 +1,4 @@
 use alloy::rpc::types::state::StateOverride;
-use thiserror::Error;
 
 use crate::{
     builder::UserOperationBuilder,
@@ -48,7 +47,8 @@ pub trait Bundler {
     ) -> Result<UserOperationReceipt, BundlerError>;
 }
 
-#[derive(Debug, Error)]
+#[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum BundlerError {
     #[error("Timeout")]
     Timeout,

@@ -40,6 +40,7 @@ pub struct Payer {
 }
 
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum WithdrawalError {
     #[error("Circuit error: {0}")]
     Circuit(#[from] kohaku_tornadocash_circuit::CircuitError),

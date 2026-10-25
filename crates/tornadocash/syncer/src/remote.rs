@@ -5,7 +5,6 @@ use kohaku_tornadocash::{
 };
 use reqwest::Client;
 use serde::Deserialize;
-use thiserror::Error;
 use tracing::info;
 
 use crate::{Syncer, SyncerError};
@@ -38,7 +37,8 @@ struct RemoteWithdrawal {
     pub fee: U256,
 }
 
-#[derive(Debug, Error)]
+#[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 enum RemoteSyncerError {
     #[error("HTTP error: {0}")]
     HttpError(#[from] reqwest::Error),

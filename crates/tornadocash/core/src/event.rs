@@ -52,6 +52,7 @@ pub struct WithdrawalEvent {
 }
 
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum SnapshotError {
     #[error("Event at block {block} outside snapshot range {range:?}")]
     EventOutOfRange { block: u64, range: Range<u64> },

@@ -11,6 +11,7 @@ mod inputs;
 pub use inputs::CircuitInputs;
 
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum CircuitError {
     #[error("Circuit error: {0}")]
     Circuit(#[from] websnark_rs::circuit::CircuitError),

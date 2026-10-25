@@ -24,6 +24,7 @@ pub struct MerkleTree<const DEPTH: usize, const ARITY: usize, E: Element, H: Has
 }
 
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum MerkleTreeError {
     #[error("Merkle tree is full")]
     TreeFull,

@@ -6,7 +6,6 @@ use std::{
 };
 
 use kohaku_tornadocash::{Pool, event::Snapshot};
-use thiserror::Error;
 
 #[cfg(feature = "saga-sync")]
 mod abis;
@@ -50,7 +49,7 @@ pub trait Syncer: Send + Sync {
 #[derive(Clone)]
 pub struct DynSyncer(Arc<dyn Syncer>);
 
-#[derive(Debug, Error)]
+#[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum SyncerError {
     #[error(transparent)]

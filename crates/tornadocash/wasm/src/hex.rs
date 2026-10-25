@@ -8,6 +8,7 @@ use tsify::Tsify;
 pub struct Hex(String);
 
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum HexError {
     #[error("Hex must start with 0x")]
     MissingPrefix,
