@@ -53,6 +53,7 @@ impl Pool {
     /// Construct an independently owned pool, borrowing and cloning the asset metadata.
     ///
     /// The asset remains usable and can be freed independently of the pool.
+    /// Custom pools are non-canonical.
     ///
     /// # Errors
     ///
@@ -85,6 +86,7 @@ impl Pool {
                 amount_wei,
                 deployed_block,
                 paymaster,
+                canonical: false,
             },
         })
     }
@@ -106,6 +108,13 @@ impl Pool {
     #[must_use]
     pub fn from_note(note: &NoteString) -> Option<Self> {
         CorePool::from_note(&note.inner).map(|inner| Self { inner })
+    }
+
+    /// Whether this is an official Tornado Cash deployment.
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    pub fn canonical(&self) -> bool {
+        self.inner.canonical
     }
 
     /// Return the pool's chain ID.

@@ -21,6 +21,9 @@ pub struct Pool {
     pub deployed_block: u64,
 
     pub paymaster: Option<PaymasterInfo>,
+    /// Whether this is an official Tornado Cash deployment.
+    /// This describes provenance, not the pool's anonymity set.
+    pub canonical: bool,
 }
 
 /// Privacy-paymaster information for a pool.
@@ -32,8 +35,18 @@ pub struct PaymasterInfo {
 
 #[allow(clippy::unreadable_literal)]
 impl Pool {
-    /// List of default Tornado Cash pools.
+    /// Complete known pool catalog, including canonical and non-canonical deployments.
     pub const POOLS: &[Pool] = &[
+        Pool::ETHEREUM_ETHER_001,
+        Pool::ETHEREUM_ETHER_003,
+        Pool::ETHEREUM_ETHER_03,
+        Pool::ETHEREUM_ETHER_3,
+        Pool::ETHEREUM_ETHER_30,
+        Pool::SEPOLIA_ETHER_001,
+        Pool::SEPOLIA_ETHER_003,
+        Pool::SEPOLIA_ETHER_03,
+        Pool::SEPOLIA_ETHER_3,
+        Pool::SEPOLIA_ETHER_30,
         Pool::SEPOLIA_ETHER_01,
         Pool::SEPOLIA_ETHER_1,
         Pool::SEPOLIA_ETHER_10,
@@ -57,7 +70,128 @@ impl Pool {
         Pool::ETHEREUM_WBTC_10,
     ];
 
+    /// Non-canonical extended pool. Deployment block verified via Blockscout's creation
+    /// transaction.
+    pub const ETHEREUM_ETHER_001: Pool = Pool {
+        canonical: false,
+        chain_id: 1,
+        address: address!("0x199112eb461ea7eec1d75b33343542e1d069b41c"),
+        asset: Asset::ETH,
+        amount_wei: 10_u128.pow(16),
+        deployed_block: 26198980,
+        paymaster: None,
+    };
+
+    /// Non-canonical extended pool. Deployment block verified via Blockscout's creation
+    /// transaction.
+    pub const ETHEREUM_ETHER_003: Pool = Pool {
+        canonical: false,
+        chain_id: 1,
+        address: address!("0x398971a7ae0fed4ae435f353ef00d3d4e4c18fd4"),
+        asset: Asset::ETH,
+        amount_wei: 3 * 10_u128.pow(16),
+        deployed_block: 26198980,
+        paymaster: None,
+    };
+
+    /// Non-canonical extended pool. Deployment block verified via Blockscout's creation
+    /// transaction.
+    pub const ETHEREUM_ETHER_03: Pool = Pool {
+        canonical: false,
+        chain_id: 1,
+        address: address!("0xf22487b84a618192aa68c0e1da24e9bbd892f774"),
+        asset: Asset::ETH,
+        amount_wei: 3 * 10_u128.pow(17),
+        deployed_block: 26198980,
+        paymaster: None,
+    };
+
+    /// Non-canonical extended pool. Deployment block verified via Blockscout's creation
+    /// transaction.
+    pub const ETHEREUM_ETHER_3: Pool = Pool {
+        canonical: false,
+        chain_id: 1,
+        address: address!("0x74185a3f30b873c0ce1f4257298d1cda61be2f9f"),
+        asset: Asset::ETH,
+        amount_wei: 3 * 10_u128.pow(18),
+        deployed_block: 26198980,
+        paymaster: None,
+    };
+
+    /// Non-canonical extended pool. Deployment block verified via Blockscout's creation
+    /// transaction.
+    pub const ETHEREUM_ETHER_30: Pool = Pool {
+        canonical: false,
+        chain_id: 1,
+        address: address!("0xc11197f71c7730c8b5db7c84191e07575f1db896"),
+        asset: Asset::ETH,
+        amount_wei: 3 * 10_u128.pow(19),
+        deployed_block: 26198983,
+        paymaster: None,
+    };
+
+    /// Non-canonical extended pool. Deployment block verified via Blockscout's creation
+    /// transaction.
+    pub const SEPOLIA_ETHER_001: Pool = Pool {
+        canonical: false,
+        chain_id: 11155111,
+        address: address!("0x0E999C5285141ccB6dFaE68A0921F37ABd3e6A87"),
+        asset: Asset::ETH,
+        amount_wei: 10_u128.pow(16),
+        deployed_block: 11949077,
+        paymaster: None,
+    };
+
+    /// Non-canonical extended pool. Deployment block verified via Blockscout's creation
+    /// transaction.
+    pub const SEPOLIA_ETHER_003: Pool = Pool {
+        canonical: false,
+        chain_id: 11155111,
+        address: address!("0x9480Be3964642efcD6CeBdb3570db8dC0f788908"),
+        asset: Asset::ETH,
+        amount_wei: 3 * 10_u128.pow(16),
+        deployed_block: 11949078,
+        paymaster: None,
+    };
+
+    /// Non-canonical extended pool. Deployment block verified via Blockscout's creation
+    /// transaction.
+    pub const SEPOLIA_ETHER_03: Pool = Pool {
+        canonical: false,
+        chain_id: 11155111,
+        address: address!("0x83091415b54d764E215153Ff54B36cCd44122e6e"),
+        asset: Asset::ETH,
+        amount_wei: 3 * 10_u128.pow(17),
+        deployed_block: 11949080,
+        paymaster: None,
+    };
+
+    /// Non-canonical extended pool. Deployment block verified via Blockscout's creation
+    /// transaction.
+    pub const SEPOLIA_ETHER_3: Pool = Pool {
+        canonical: false,
+        chain_id: 11155111,
+        address: address!("0x7eE90edc51c3739Af3ee277e09ADE3F3d6bad4AF"),
+        asset: Asset::ETH,
+        amount_wei: 3 * 10_u128.pow(18),
+        deployed_block: 11949081,
+        paymaster: None,
+    };
+
+    /// Non-canonical extended pool. Deployment block verified via Blockscout's creation
+    /// transaction.
+    pub const SEPOLIA_ETHER_30: Pool = Pool {
+        canonical: false,
+        chain_id: 11155111,
+        address: address!("0x3d1C943dfb2C8d9905B0Da0AFD18615915fF343A"),
+        asset: Asset::ETH,
+        amount_wei: 3 * 10_u128.pow(19),
+        deployed_block: 11949082,
+        paymaster: None,
+    };
+
     pub const SEPOLIA_ETHER_01: Pool = Pool {
+        canonical: true,
         chain_id: 11155111,
         address: address!("0x8C4A04d872a6C1BE37964A21ba3a138525dFF50b"),
         asset: Asset::ETH,
@@ -70,6 +204,7 @@ impl Pool {
     };
 
     pub const SEPOLIA_ETHER_1: Pool = Pool {
+        canonical: true,
         chain_id: 11155111,
         address: address!("0x8cc930096B4Df705A007c4A039BDFA1320Ed2508"),
         asset: Asset::ETH,
@@ -82,6 +217,7 @@ impl Pool {
     };
 
     pub const SEPOLIA_ETHER_10: Pool = Pool {
+        canonical: true,
         chain_id: 11155111,
         address: address!("0x8D10d506D29Fc62ABb8A290B99F66dB27Fc43585"),
         asset: Asset::ETH,
@@ -91,6 +227,7 @@ impl Pool {
     };
 
     pub const SEPOLIA_DAI_100: Pool = Pool {
+        canonical: true,
         chain_id: 11155111,
         address: address!("0x6921fd1a97441dd603a997ED6DDF388658daf754"),
         asset: Asset::SEPOLIA_DAI,
@@ -103,6 +240,7 @@ impl Pool {
     };
 
     pub const ETHEREUM_ETHER_01: Pool = Pool {
+        canonical: true,
         chain_id: 1,
         address: address!("0x12D66f87A04A9E220743712cE6d9bB1B5616B8Fc"),
         asset: Asset::ETH,
@@ -115,6 +253,7 @@ impl Pool {
     };
 
     pub const ETHEREUM_ETHER_1: Pool = Pool {
+        canonical: true,
         chain_id: 1,
         address: address!("0x47CE0C6eD5B0Ce3d3A51fdb1C52DC66a7c3c2936"),
         asset: Asset::ETH,
@@ -127,6 +266,7 @@ impl Pool {
     };
 
     pub const ETHEREUM_ETHER_10: Pool = Pool {
+        canonical: true,
         chain_id: 1,
         address: address!("0x910Cbd523D972eb0a6f4cAe4618aD62622b39DbF"),
         asset: Asset::ETH,
@@ -139,6 +279,7 @@ impl Pool {
     };
 
     pub const ETHEREUM_ETHER_100: Pool = Pool {
+        canonical: true,
         chain_id: 1,
         address: address!("0xA160cdAB225685dA1d56aa342Ad8841c3b53f291"),
         asset: Asset::ETH,
@@ -151,6 +292,7 @@ impl Pool {
     };
 
     pub const ETHEREUM_DAI_100: Pool = Pool {
+        canonical: true,
         chain_id: 1,
         address: address!("0xD4B88Df4D29F5CedD6857912842cff3b20C8Cfa3"),
         asset: Asset::ETHEREUM_DAI,
@@ -160,6 +302,7 @@ impl Pool {
     };
 
     pub const ETHEREUM_DAI_1000: Pool = Pool {
+        canonical: true,
         chain_id: 1,
         address: address!("0xFD8610d20aA15b7B2E3Be39B396a1bC3516c7144"),
         asset: Asset::ETHEREUM_DAI,
@@ -169,6 +312,7 @@ impl Pool {
     };
 
     pub const ETHEREUM_DAI_10000: Pool = Pool {
+        canonical: true,
         chain_id: 1,
         address: address!("0x07687e702b410Fa43f4cB4Af7FA097918ffD2730"),
         asset: Asset::ETHEREUM_DAI,
@@ -181,6 +325,7 @@ impl Pool {
     };
 
     pub const ETHEREUM_DAI_100000: Pool = Pool {
+        canonical: true,
         chain_id: 1,
         address: address!("0x23773E65ed146A459791799d01336DB287f25334"),
         asset: Asset::ETHEREUM_DAI,
@@ -193,6 +338,7 @@ impl Pool {
     };
 
     pub const ETHEREUM_USDC_100: Pool = Pool {
+        canonical: true,
         chain_id: 1,
         address: address!("0xd96f2B1c14Db8458374d9Aca76E26c3D18364307"),
         asset: Asset::ETHEREUM_USDC,
@@ -205,6 +351,7 @@ impl Pool {
     };
 
     pub const ETHEREUM_USDC_1000: Pool = Pool {
+        canonical: true,
         chain_id: 1,
         address: address!("0x4736dCf1b7A3d580672CcE6E7c65cd5cc9cFBa9D"),
         asset: Asset::ETHEREUM_USDC,
@@ -217,6 +364,7 @@ impl Pool {
     };
 
     pub const ETHEREUM_USDT_100: Pool = Pool {
+        canonical: true,
         chain_id: 1,
         address: address!("0x169AD27A470D064DEDE56a2D3ff727986b15D52B"),
         asset: Asset::ETHEREUM_USDT,
@@ -229,6 +377,7 @@ impl Pool {
     };
 
     pub const ETHEREUM_USDT_1000: Pool = Pool {
+        canonical: true,
         chain_id: 1,
         address: address!("0x0836222F2B2B24A3F36f98668Ed8F0B38D1a872f"),
         asset: Asset::ETHEREUM_USDT,
@@ -241,6 +390,7 @@ impl Pool {
     };
 
     pub const ETHEREUM_WBTC_01: Pool = Pool {
+        canonical: true,
         chain_id: 1,
         address: address!("0x178169B423a011fff22B9e3F3abeA13414dDD0F1"),
         asset: Asset::ETHEREUM_WBTC,
@@ -253,6 +403,7 @@ impl Pool {
     };
 
     pub const ETHEREUM_WBTC_1: Pool = Pool {
+        canonical: true,
         chain_id: 1,
         address: address!("0x610B717796ad172B316836AC95a2ffad065CeaB4"),
         asset: Asset::ETHEREUM_WBTC,
@@ -265,6 +416,7 @@ impl Pool {
     };
 
     pub const ETHEREUM_WBTC_10: Pool = Pool {
+        canonical: true,
         chain_id: 1,
         address: address!("0xbB93e510BbCD0B7beb5A853875f9eC60275CF498"),
         asset: Asset::ETHEREUM_WBTC,
@@ -277,6 +429,7 @@ impl Pool {
     };
 
     pub const POLYGON_MATIC_100: Pool = Pool {
+        canonical: true,
         chain_id: 137,
         address: address!("0x1E34A77868E19A6647b1f2F47B51ed72dEDE95DD"),
         asset: Asset::MATIC,
@@ -286,6 +439,7 @@ impl Pool {
     };
 
     pub const POLYGON_MATIC_1000: Pool = Pool {
+        canonical: true,
         chain_id: 137,
         address: address!("0xdf231d99Ff8b6c6CBF4E9B9a945CBAcEF9339178"),
         asset: Asset::MATIC,

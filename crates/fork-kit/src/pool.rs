@@ -67,6 +67,7 @@ pub async fn deploy_pool(
         amount_wei: denomination_wei,
         deployed_block: 0,
         paymaster: None,
+        canonical: false,
     })
 }
 
