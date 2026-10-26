@@ -1,5 +1,5 @@
 use alloy::primitives::{Address, Bytes};
-use kohaku_stealth::{Account, SchemeId3, StealthAddress, StealthScheme};
+use kohaku_stealth::{Account, Announcement, SchemeId3, StealthScheme};
 use serde::Deserialize;
 
 #[derive(Deserialize)]
@@ -28,7 +28,7 @@ impl Payment {
         account
     }
 
-    pub fn announcement(&self) -> StealthAddress {
+    pub fn announcement(&self) -> Announcement {
         SchemeId3::announcement_from_bytes(
             &self.stealth_address.into_array(),
             &self.ephemeral_pub_key,

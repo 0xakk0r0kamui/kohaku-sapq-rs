@@ -15,13 +15,13 @@ use thiserror::Error;
 
 use crate::{
     abis::IERC5564Announcer::Announcement as AnnouncementEvent, contracts::Deployment,
-    scheme3::StealthAddress,
+    scheme3::Announcement,
 };
 
 /// An announcement from an ERC-5564 log.
 #[derive(Clone, Debug)]
 pub struct AnnouncementRecord {
-    pub announcement: StealthAddress,
+    pub announcement: Announcement,
     /// Full ERC-5564 metadata, including the view tag and any sender-supplied data.
     /// The scanner does not validate the application data.
     pub metadata: Bytes,

@@ -9,9 +9,9 @@ Announcements use [ERC-5564](https://eips.ethereum.org/EIPS/eip-5564).
 Decode the recipient's meta-address:
 
 ```rust
-use kohaku_stealth::{SchemeId3, StealthMetaAddress, StealthScheme};
+use kohaku_stealth::{MetaAddress, SchemeId3, StealthScheme};
 
-fn parse_recipient(bytes: &[u8]) -> Option<StealthMetaAddress> {
+fn parse_recipient(bytes: &[u8]) -> Option<MetaAddress> {
     SchemeId3::meta_from_bytes(bytes)
 }
 ```
@@ -25,12 +25,12 @@ Generate a stealth address and prepare its announcement transaction:
 ```rust,no_run
 use alloy::{primitives::Address, rpc::types::TransactionRequest};
 use kohaku_stealth::{
-    Deployment, StealthMetaAddress, contracts::prepare_announcement, generate_stealth_address,
+    Deployment, MetaAddress, contracts::prepare_announcement, generate_stealth_address,
 };
 
 fn example(
     deployment: &Deployment,
-    recipient: &StealthMetaAddress,
+    recipient: &MetaAddress,
 ) -> Result<(Address, TransactionRequest), kohaku_stealth::SchemeError> {
     let mut rng = rand::rng();
     let generated = generate_stealth_address(recipient, &mut rng)?;
