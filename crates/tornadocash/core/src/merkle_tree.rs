@@ -5,12 +5,12 @@ use std::sync::OnceLock;
 use alloy::primitives::keccak256;
 use ark_bn254::Fr;
 use ark_ff::PrimeField;
-use kohaku_merkle_tree::{MerkleTreeError, hasher::Hasher};
+use kohaku_merkle_tree::{Hasher, MerkleTreeError};
 
 use crate::{
     Note,
     crypto::mimc::mimc_sponge_hash,
-    event::{DepositEvent, SyncEvent},
+    event::{DepositEvent, Snapshot, SyncEvent},
     field::Field,
 };
 
@@ -18,7 +18,7 @@ use crate::{
 pub type MerkleTree = kohaku_merkle_tree::MerkleTree<20, 2, Field, TornadoHasher>;
 
 /// `MerkleProof` type used in Tornado Cash.
-pub type MerkleProof = kohaku_merkle_tree::proof::MerkleProof<20, 2, Field>;
+pub type MerkleProof = kohaku_merkle_tree::MerkleProof<20, 2, Field>;
 
 /// `MerkleTree` extension trait for Tornado Cash.
 pub trait MerkleTreeExt {
@@ -31,14 +31,13 @@ pub trait MerkleTreeExt {
     ///
     /// # Errors
     /// Returns an error if the events are non-contiguous or if the splicing fails.
-    fn splice_events(&mut self, events: &[SyncEvent]) -> Result<(), MerkleTreeError>;
+    fn splice_events(&mut self, events: &Snapshot) -> Result<(), MerkleTreeError>;
 }
 
 /// `MiMC` sponge hasher for Tornado Cash Merkle tree.
 ///
 /// Reference implementation:
 /// [contracts/Classic/MerkleTreeWithHistory.sol](https://github.com/tornado-dao/tornado-contracts/blob/cc57528ae13e762c36ae715f37e018528d6e0605/contracts/Classic/MerkleTreeWithHistory.sol#L57)
-#[derive(Copy, Clone)]
 pub struct TornadoHasher;
 
 impl Hasher<2, Field> for TornadoHasher {
@@ -57,10 +56,11 @@ impl Hasher<2, Field> for TornadoHasher {
 
 impl MerkleTreeExt for MerkleTree {
     fn note_proof(&self, note: &Note) -> Result<MerkleProof, MerkleTreeError> {
-        self.leaf_proof(note.commitment())
+        self.leaf_proof(&note.commitment())
     }
 
-    fn splice_events(&mut self, events: &[SyncEvent]) -> Result<(), MerkleTreeError> {
+    fn splice_events(&mut self, s: &Snapshot) -> Result<(), MerkleTreeError> {
+        let events = s.events();
         let deposits: Vec<&DepositEvent> = events
             .iter()
             .filter_map(|e| match e {
@@ -123,7 +123,7 @@ mod tests {
         let leaves: [Field; 10] = from_fn(|i| Field::from((i + 1) as u32));
         tree.splice(0, &leaves).unwrap();
 
-        let root: U256 = tree.root().unwrap().into();
+        let root: U256 = tree.root().into();
         let expected = uint!(
             15200063891796499502721825879098395282261979630510984497744981505913469850275_U256
         );

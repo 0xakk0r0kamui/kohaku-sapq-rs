@@ -62,7 +62,7 @@ async fn test_relayer_withdraw() -> Result<(), anyhow::Error> {
     // Sync a Merkle tree against the provider
     let mut tree = MerkleTree::new();
     let snapshot = syncer.sync(&pool, ..).await?;
-    tree.splice_events(snapshot.events())?;
+    tree.splice_events(&snapshot)?;
 
     // Withdraw the note via the relayer
     let recipient = PrivateKeySigner::random().address();

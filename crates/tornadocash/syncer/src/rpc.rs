@@ -2,7 +2,7 @@ use alloy::{providers::Provider, rpc::types::Filter};
 use kohaku_rpc_provider::{StreamedEvent, StreamedEventConfig};
 use kohaku_tornadocash::{
     Pool,
-    event::{Snapshot, SyncEvent},
+    event::{LogDecodeError, Snapshot, SyncEvent},
 };
 use tracing::{info, warn};
 
@@ -19,11 +19,9 @@ pub struct RpcSyncer<P: Provider> {
 #[non_exhaustive]
 enum RpcSyncerError {
     #[error("Error decoding log: {0}")]
-    LogDecodeError(#[from] alloy::sol_types::Error),
+    LogDecodeError(#[from] LogDecodeError),
     #[error("RPC error: {0}")]
     RpcError(#[from] alloy::transports::RpcError<alloy::transports::TransportErrorKind>),
-    #[error("Field conversion error: {0}")]
-    Field(#[from] kohaku_tornadocash::FieldNotInRangeError),
     #[error("Snapshot error: {0}")]
     Snapshot(#[from] kohaku_tornadocash::event::SnapshotError),
 }
@@ -86,11 +84,12 @@ impl<P: Provider + Clone> RpcSyncer<P> {
 
         let mut events = Vec::new();
         for log in logs {
-            match SyncEvent::try_from_log(&log) {
-                Some(decoded) => events.push(decoded),
-                None => {
+            match SyncEvent::try_from(&log) {
+                Ok(decoded) => events.push(decoded),
+                Err(LogDecodeError::UnknownEvent) => {
                     warn!("Unknown event with topic {:?}", log.topic0());
                 }
+                Err(e) => return Err(e.into()),
             }
         }
 

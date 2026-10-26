@@ -67,7 +67,7 @@ impl MerkleTree {
 
     /// Return the tree's root as lowercase, 32-byte hex.
     pub fn root(&self) -> Result<Ts<Hex>, JsError> {
-        Ok(Hex::from(self.inner.root()?).into_ts()?)
+        Ok(Hex::from(self.inner.root()).into_ts()?)
     }
 
     /// Return an independently owned inclusion proof capturing the current root.
@@ -89,7 +89,7 @@ impl MerkleTree {
     #[wasm_bindgen(js_name = leafProof)]
     pub fn leaf_proof(&self, commitment: &Ts<Hex>) -> Result<MerkleProof, JsError> {
         let leaf = Field::try_from(commitment.to_rust()?)?;
-        Ok(self.inner.leaf_proof(leaf)?.into())
+        Ok(self.inner.leaf_proof(&leaf)?.into())
     }
 }
 
@@ -128,7 +128,7 @@ mod wasm_tests {
             .into_ts()
             .unwrap();
         let mut tree = MerkleTree::from_leaves(&initial).unwrap();
-        let before = tree.inner.root().unwrap();
+        let before = tree.inner.root();
         let malformed = Commitments(vec![
             Hex::from(Field::from(2)),
             Hex::from([0xff; 32].as_slice()),
@@ -137,7 +137,7 @@ mod wasm_tests {
         .unwrap();
 
         assert!(tree.splice(0_u32.into(), &malformed).is_err());
-        assert_eq!(tree.inner.root().unwrap(), before);
+        assert_eq!(tree.inner.root(), before);
         assert_eq!(tree.inner.leaves(), &[Field::from(1)]);
     }
 

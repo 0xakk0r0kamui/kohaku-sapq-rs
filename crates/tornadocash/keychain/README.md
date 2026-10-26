@@ -1,6 +1,6 @@
 # kohaku-tornadocash-keychain
 
-Deterministic note derivation for [`kohaku-tornadocash`](../core/).
+Deterministic note derivation for `kohaku-tornadocash`.
 
 [`Keychain`]s are used to derive tornadocash note secrets from a single source of entropy. This makes it easier for users to manage their notes, because they only need to backup a single secret (e.g. a mnemonic) instead of each individual note secret. New notes can be derived from the keychain by incrementing a nonce, and notes can be recovered by scanning pools' synced events against the keychain's derivation scheme.
 

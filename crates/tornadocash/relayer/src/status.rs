@@ -88,6 +88,10 @@ impl RelayerStatus {
             return Err(RelayerError::UnsupportedPool(pool.clone()));
         };
 
+        if price.is_zero() {
+            return Err(RelayerError::UnsupportedPool(pool.clone()));
+        }
+
         // If the asset is non-native, the fee is:
         let fee = (expense + refund) * U256::from(10).pow(U256::from(pool.asset.decimals()))
             / price

@@ -2,6 +2,9 @@
 name = "kohaku-tornadocash"
 version = "0.1.0"
 edition = "2024"
+description = "Tornado Cash core types"
+license.workspace = true
+repository.workspace = true
 
 [lib]
 crate-type = ["rlib"]

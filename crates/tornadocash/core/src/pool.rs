@@ -13,6 +13,7 @@ use crate::{asset::Asset, note::NoteString};
 /// named in the format `<CHAIN>_<ASSET>_<AMOUNT>`, e.g. `ETHEREUM_ETHER_01` for
 /// the 0.1 ETH pool on Ethereum mainnet.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub struct Pool {
     pub chain_id: u64,
     pub address: Address,
@@ -447,6 +448,26 @@ impl Pool {
         deployed_block: 16_258_032,
         paymaster: None,
     };
+
+    #[must_use]
+    pub const fn new(
+        chain_id: u64,
+        address: Address,
+        asset: Asset,
+        amount_wei: u128,
+        deployed_block: u64,
+        paymaster: Option<PaymasterInfo>,
+    ) -> Self {
+        Self {
+            chain_id,
+            address,
+            asset,
+            amount_wei,
+            deployed_block,
+            paymaster,
+            canonical: false,
+        }
+    }
 
     /// Creates a pool from the note's pool hints.
     #[must_use]

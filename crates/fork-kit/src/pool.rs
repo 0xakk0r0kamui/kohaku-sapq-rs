@@ -60,15 +60,14 @@ pub async fn deploy_pool(
     )
     .await?;
 
-    Ok(Pool {
-        chain_id: provider.get_chain_id().await?,
-        address: *tornado.address(),
-        asset: Asset::ETH,
-        amount_wei: denomination_wei,
-        deployed_block: 0,
-        paymaster: None,
-        canonical: false,
-    })
+    Ok(Pool::new(
+        provider.get_chain_id().await?,
+        *tornado.address(),
+        Asset::ETH,
+        denomination_wei,
+        0,
+        None,
+    ))
 }
 
 /// Deploy a fresh `TornadoProxyLight` to `provider` and return its address.

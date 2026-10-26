@@ -1,7 +1,6 @@
 use alloy::{primitives::Address, providers::Provider};
-use ruint::aliases::U256;
 
-use crate::{abis::tornado::Tornado, asset::Asset, field::Field, pool::Pool};
+use crate::{abis::tornado::Tornado, field::Field, pool::Pool};
 
 /// Extension trait for [`Provider`] with Tornadocash-specific accessors.
 pub trait TornadoProviderExt: Provider {
@@ -27,15 +26,6 @@ pub trait TornadoProviderExt: Provider {
         pool: &Pool,
         root: Field,
     ) -> impl Future<Output = Result<bool, alloy::contract::Error>>;
-
-    /// Returns the amount of fee token equivalent to the given `wei_amount`.
-    ///
-    /// If the pool's asset is native, returns `wei_amount` directly.
-    fn quote_wei_in_fee_token(
-        &self,
-        pool: &Pool,
-        wei_amount: U256,
-    ) -> impl Future<Output = Result<U256, alloy::contract::Error>>;
 
     /// Returns the address of the contract that verifies the pool's withdrawal proofs.
     fn verifier(
@@ -77,22 +67,6 @@ impl<P: Provider> TornadoProviderExt for P {
             .isKnownRoot(root.into())
             .call()
             .await
-    }
-
-    async fn quote_wei_in_fee_token(
-        &self,
-        pool: &Pool,
-        wei_amount: U256,
-    ) -> Result<U256, alloy::contract::Error> {
-        match pool.asset {
-            Asset::Native { .. } => Ok(wei_amount),
-            Asset::Erc20 { address, .. } => {
-                Tornado::new(pool.address, self)
-                    .quoteWeiInToken(address, wei_amount)
-                    .call()
-                    .await
-            }
-        }
     }
 
     async fn verifier(&self, pool: &Pool) -> Result<Address, alloy::contract::Error> {

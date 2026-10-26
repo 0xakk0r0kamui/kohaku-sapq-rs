@@ -5,7 +5,7 @@ use websnark_rs::proof::{Proof, prove_random};
 
 use crate::artifacts::{circuit, proving_key};
 
-pub mod artifacts;
+mod artifacts;
 mod inputs;
 
 pub use inputs::CircuitInputs;

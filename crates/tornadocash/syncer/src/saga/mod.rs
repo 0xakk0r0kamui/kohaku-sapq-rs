@@ -17,10 +17,6 @@ mod manifest;
 /// and decodes the chunk's events into [`SyncEvent`](kohaku_tornadocash::event::SyncEvent)s.
 ///
 /// Does not currently implement chunk caching or chunk signature verification.
-/// - Chunk caching could be added to reduce redundant network downloads, but is not required for
-///   this MVP.
-/// - I don't fully buy the benefits of signature verification. Since invalid chunks would result in
-///   invalid merkle roots, we can detect and skip invalid chunks regardless.
 pub struct SagaSyncer {
     client: reqwest::Client,
     base_url: String,

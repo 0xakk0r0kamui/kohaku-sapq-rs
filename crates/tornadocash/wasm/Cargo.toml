@@ -1,8 +1,10 @@
 [package]
 name = "kohaku-tornadocash-wasm"
-version = "0.1.0"
+version = "0.0.1"
 edition = "2024"
-publish = false
+description = "Tornado Cash wasm bindings"
+license.workspace = true
+repository.workspace = true
 
 [lib]
 crate-type = ["cdylib", "rlib"]

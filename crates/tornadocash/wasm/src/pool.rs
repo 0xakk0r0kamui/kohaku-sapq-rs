@@ -79,15 +79,14 @@ impl Pool {
             .transpose()?;
 
         Ok(Self {
-            inner: CorePool {
+            inner: CorePool::new(
                 chain_id,
                 address,
-                asset: asset.inner.clone(),
+                asset.inner.clone(),
                 amount_wei,
                 deployed_block,
                 paymaster,
-                canonical: false,
-            },
+            ),
         })
     }
 

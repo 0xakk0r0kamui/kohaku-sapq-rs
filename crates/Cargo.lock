@@ -4554,7 +4554,7 @@ dependencies = [
 
 [[package]]
 name = "kohaku-rpc-provider"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "alloy",
  "futures",
@@ -4564,7 +4564,7 @@ dependencies = [
 
 [[package]]
 name = "kohaku-tor-rpc"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "alloy",
  "anyhow",
@@ -4621,10 +4621,9 @@ dependencies = [
 
 [[package]]
 name = "kohaku-tornadocash-keychain"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "alloy",
- "cfg_aliases",
  "kohaku-tornadocash",
  "thiserror 2.0.20",
  "tokio",
@@ -4632,14 +4631,13 @@ dependencies = [
 
 [[package]]
 name = "kohaku-tornadocash-paymaster"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "alloy",
  "anyhow",
  "cfg_aliases",
  "insta",
  "kohaku-fork-kit",
- "kohaku-merkle-tree",
  "kohaku-tornadocash",
  "kohaku-tornadocash-syncer",
  "kohaku-userop-kit",
@@ -4652,7 +4650,7 @@ dependencies = [
 
 [[package]]
 name = "kohaku-tornadocash-relayer"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "alloy",
  "anyhow",
@@ -4672,7 +4670,7 @@ dependencies = [
 
 [[package]]
 name = "kohaku-tornadocash-syncer"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "alloy",
  "anyhow",
@@ -4696,7 +4694,7 @@ dependencies = [
 
 [[package]]
 name = "kohaku-tornadocash-wasm"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "alloy",
  "getrandom 0.2.17",
@@ -4715,7 +4713,7 @@ dependencies = [
 
 [[package]]
 name = "kohaku-userop-kit"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "alloy",
  "alloy-sol-types",

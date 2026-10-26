@@ -7,7 +7,7 @@ Exports a simple API for creating in-memory Merkle Trees, inserting leaves, and 
 ## Examples
 
 ```rust
-use kohaku_merkle_tree::{MerkleTree, hasher::Hasher};
+use kohaku_merkle_tree::{MerkleTree, Hasher};
 
 # #[derive(Clone)]
 # pub struct ToyHasher;
@@ -25,9 +25,9 @@ use kohaku_merkle_tree::{MerkleTree, hasher::Hasher};
 # fn example() -> Result<(), Box<dyn std::error::Error>> {
 let mut tree = MerkleTree::<4, 2, u32, ToyHasher>::new();
 
-tree.insert(0, 1);
-tree.insert(1, 2);
-tree.insert(2, 3);
+tree.insert(0, 1)?;
+tree.insert(1, 2)?;
+tree.insert(2, 3)?;
 tree.splice(3, &[4, 5, 6])?;
 
 let proof = tree.proof(1)?;

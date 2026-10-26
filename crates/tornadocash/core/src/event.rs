@@ -9,7 +9,11 @@ use alloy::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::{abis::tornado::Tornado, field::Field, pool::Pool};
+use crate::{
+    abis::tornado::Tornado,
+    field::{Field, FieldNotInRangeError},
+    pool::Pool,
+};
 
 /// A set of events emitted by a pool within a given block range.
 ///
@@ -63,6 +67,19 @@ pub enum SnapshotError {
     EventOutOfRange { block: u64, range: Range<u64> },
     #[error("Non-contiguous deposits: leaf {actual} follows leaf {previous}")]
     NonContiguousDeposits { previous: u32, actual: u32 },
+}
+
+#[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
+pub enum LogDecodeError {
+    #[error("Log is not a Tornado deposit or withdrawal event")]
+    UnknownEvent,
+    #[error("Error decoding log: {0}")]
+    Decode(#[from] alloy::sol_types::Error),
+    #[error("Field conversion error: {0}")]
+    Field(#[from] FieldNotInRangeError),
+    #[error("Log has no block number")]
+    MissingBlockNumber,
 }
 
 impl Snapshot {
@@ -119,33 +136,6 @@ impl Snapshot {
 }
 
 impl SyncEvent {
-    /// Attempts to decode an alloy RPC log into a `SyncEvent`.
-    ///
-    /// Returns `None` if the log is not a known event.
-    pub fn try_from_log(log: &Log) -> Option<Self> {
-        match log.topics().first() {
-            Some(&Tornado::Deposit::SIGNATURE_HASH) => {
-                let decoded = Tornado::Deposit::decode_log(&log.inner).ok()?.data;
-                Some(SyncEvent::Deposit(DepositEvent {
-                    commitment: decoded.commitment.try_into().ok()?,
-                    leaf_index: decoded.leafIndex,
-                    block_number: log.block_number?,
-                }))
-            }
-            Some(&Tornado::Withdrawal::SIGNATURE_HASH) => {
-                let decoded = Tornado::Withdrawal::decode_log(&log.inner).ok()?.data;
-                Some(SyncEvent::Withdrawal(WithdrawalEvent {
-                    to: decoded.to,
-                    nullifier_hash: decoded.nullifierHash.try_into().ok()?,
-                    relayer: decoded.relayer,
-                    fee: decoded.fee,
-                    block_number: log.block_number?,
-                }))
-            }
-            _ => None,
-        }
-    }
-
     fn block_number(&self) -> u64 {
         match self {
             SyncEvent::Deposit(deposit) => deposit.block_number,
@@ -157,6 +147,34 @@ impl SyncEvent {
         match self {
             SyncEvent::Deposit(deposit) => Some(deposit.leaf_index),
             SyncEvent::Withdrawal(_) => None,
+        }
+    }
+}
+
+impl TryFrom<&Log> for SyncEvent {
+    type Error = LogDecodeError;
+
+    fn try_from(log: &Log) -> Result<Self, Self::Error> {
+        match log.topics().first() {
+            Some(&Tornado::Deposit::SIGNATURE_HASH) => {
+                let decoded = Tornado::Deposit::decode_log(&log.inner)?.data;
+                Ok(SyncEvent::Deposit(DepositEvent {
+                    commitment: decoded.commitment.try_into()?,
+                    leaf_index: decoded.leafIndex,
+                    block_number: log.block_number.ok_or(LogDecodeError::MissingBlockNumber)?,
+                }))
+            }
+            Some(&Tornado::Withdrawal::SIGNATURE_HASH) => {
+                let decoded = Tornado::Withdrawal::decode_log(&log.inner)?.data;
+                Ok(SyncEvent::Withdrawal(WithdrawalEvent {
+                    to: decoded.to,
+                    nullifier_hash: decoded.nullifierHash.try_into()?,
+                    relayer: decoded.relayer,
+                    fee: decoded.fee,
+                    block_number: log.block_number.ok_or(LogDecodeError::MissingBlockNumber)?,
+                }))
+            }
+            _ => Err(LogDecodeError::UnknownEvent),
         }
     }
 }

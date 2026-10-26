@@ -164,11 +164,6 @@ impl ProvenWithdrawal {
         self.root
     }
 
-    #[must_use]
-    pub fn proof(&self) -> &Proof {
-        &self.proof
-    }
-
     /// Returns the call to withdraw from the pool using the generated proof.
     ///
     /// ERC20 withdrawals attach the native-currency refund paid to the recipient.

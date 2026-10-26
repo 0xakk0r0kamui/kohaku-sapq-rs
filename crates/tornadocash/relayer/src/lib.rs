@@ -100,6 +100,7 @@ pub struct WithdrawalStatus {
 }
 
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum RelayerError {
     #[error("Unsupported pool: {0}")]
     UnsupportedPool(Pool),

@@ -2,7 +2,7 @@ use alloy::{
     primitives::{Address, B256},
     rpc::types::Log,
 };
-use kohaku_tornadocash::event::SyncEvent;
+use kohaku_tornadocash::event::{LogDecodeError, SyncEvent};
 use serde::{Deserialize, Serialize};
 use tsify::{Ts, Tsify};
 use wasm_bindgen::prelude::*;
@@ -54,22 +54,24 @@ pub enum DecodedEvent {
     },
 }
 
-/// Decode a supplied log using [`SyncEvent::try_from_log`].
+/// Decode a supplied log into a [`SyncEvent`].
 ///
-/// Returns the decoded event or undefined for any core no-result, including an
-/// unknown/undecodable event or absent block number.
+/// Returns the decoded event, or undefined if the log is not a Tornado deposit or
+/// withdrawal event.
 ///
 /// # Errors
 ///
 /// Throws a JavaScript Error for malformed input: topics must be 32-byte Hex
 /// strings with at most four entries, data must be Hex bytes, and a present
-/// blockNumber must be an unsigned u64 bigint.
+/// blockNumber must be an unsigned u64 bigint. Also throws if a Tornado event
+/// cannot be decoded or has no block number.
 #[wasm_bindgen(js_name = decodeEvent)]
 pub fn decode_event(log: &Ts<LogInput>) -> Result<Option<Ts<DecodedEvent>>, JsError> {
     let log = log.to_rust()?.into_log()?;
-    match SyncEvent::try_from_log(&log) {
-        Some(event) => Ok(Some(DecodedEvent::from(event).into_ts()?)),
-        None => Ok(None),
+    match SyncEvent::try_from(&log) {
+        Ok(event) => Ok(Some(DecodedEvent::from(event).into_ts()?)),
+        Err(LogDecodeError::UnknownEvent) => Ok(None),
+        Err(e) => Err(e.into()),
     }
 }
 

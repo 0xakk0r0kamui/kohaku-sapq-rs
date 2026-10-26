@@ -1,15 +1,15 @@
 [package]
 name = "kohaku-tornadocash-keychain"
-version = "0.1.0"
+version = "0.0.1"
 edition = "2024"
+description = "Tornado Cash deterministic keyring"
+license.workspace = true
+repository.workspace = true
 
 [dependencies]
 alloy = { workspace = true, features = ["eip712"] }
 kohaku-tornadocash = { workspace = true }
 thiserror = { workspace = true }
-
-[build-dependencies]
-cfg_aliases = { workspace = true }
 
 [dev-dependencies]
 alloy = { workspace = true, features = ["signers", "signer-local"] }

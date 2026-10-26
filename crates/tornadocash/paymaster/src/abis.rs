@@ -1,6 +1,11 @@
 use alloy::sol;
 
 sol!(
+    #[sol(rpc)]
+    contract TornadoPaymaster {
+        function quoteWeiInToken(address feeToken, uint256 weiAmount) external view returns (uint256 tokenAmount);
+    }
+
     struct PaymasterData {
         address adapter;
         bytes adapterData;

@@ -15,6 +15,10 @@ members = [
 ]
 resolver = "3"
 
+[workspace.package]
+license = "MIT"
+repository = "https://github.com/ethereum/kohaku-rs"
+
 [workspace.lints.clippy]
 cast_possible_truncation = { level = "allow" }
 missing_errors_doc = { level = "allow" }
@@ -39,16 +43,16 @@ hex = "0.4.3"
 insta = "1.48.0"
 js-sys = "0.3.85"
 kohaku-fork-kit = { path = "fork-kit" }
-kohaku-merkle-tree = { path = "merkle-tree" }
-kohaku-rpc-provider = { path = "rpc-provider" }
-kohaku-tor-rpc = { path = "tor-rpc" }
-kohaku-tornadocash-circuit = { path = "tornadocash/circuit" }
-kohaku-tornadocash = { path = "tornadocash/core" }
-kohaku-tornadocash-keychain = { path = "tornadocash/keychain" }
-kohaku-tornadocash-paymaster = { path = "tornadocash/paymaster" }
-kohaku-tornadocash-relayer = { path = "tornadocash/relayer" }
-kohaku-tornadocash-syncer = { path = "tornadocash/syncer" }
-kohaku-userop-kit = { path = "userop-kit" }
+kohaku-merkle-tree = { version = "0.1.0", path = "merkle-tree" }
+kohaku-rpc-provider = { version = "0.0.1", path = "rpc-provider" }
+kohaku-tor-rpc = { version = "0.0.1", path = "tor-rpc" }
+kohaku-tornadocash-circuit = { version = "0.1.0", path = "tornadocash/circuit" }
+kohaku-tornadocash = { version = "0.1.0", path = "tornadocash/core" }
+kohaku-tornadocash-keychain = { version = "0.0.1", path = "tornadocash/keychain" }
+kohaku-tornadocash-paymaster = { version = "0.0.1", path = "tornadocash/paymaster" }
+kohaku-tornadocash-relayer = { version = "0.0.1", path = "tornadocash/relayer" }
+kohaku-tornadocash-syncer = { version = "0.0.1", path = "tornadocash/syncer" }
+kohaku-userop-kit = { version = "0.0.1", path = "userop-kit" }
 num-bigint = "0.5.1"
 num-traits = "0.2.19"
 postcard = "1.1.3"

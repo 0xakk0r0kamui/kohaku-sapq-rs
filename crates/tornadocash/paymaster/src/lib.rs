@@ -54,7 +54,8 @@ use alloy::{
     sol_types::SolValue,
 };
 use kohaku_tornadocash::{
-    Payer, PaymasterInfo, Pool, ProvenWithdrawal, TornadoProviderExt, Withdrawal, WithdrawalError,
+    Asset, Payer, PaymasterInfo, Pool, ProvenWithdrawal, TornadoProviderExt, Withdrawal,
+    WithdrawalError,
     merkle_tree::MerkleProof,
 };
 use kohaku_userop_kit::{
@@ -62,7 +63,7 @@ use kohaku_userop_kit::{
     bundler::{Bundler, BundlerExt},
 };
 
-use crate::abis::{PaymasterData, TornadoAdapterData};
+use crate::abis::{PaymasterData, TornadoAdapterData, TornadoPaymaster};
 
 mod abis;
 
@@ -94,14 +95,15 @@ pub trait UserOperationPaymasterExt: Sized {
         provider: &impl Provider,
         bundler: &B,
         rng: &mut R,
-    ) -> impl std::future::Future<Output = Result<Self, TornadoPaymasterError>>
+    ) -> impl std::future::Future<Output = Result<Self, PaymasterError>>
     where
         R: rand::CryptoRng,
         B: Bundler + ?Sized;
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum TornadoPaymasterError {
+#[non_exhaustive]
+pub enum PaymasterError {
     #[error("Pool missing paymaster: {0}")]
     PoolMissingPaymaster(Pool),
     #[error("Pool denomination cannot cover the operation's gas: {required} > {denomination}")]
@@ -114,8 +116,6 @@ pub enum TornadoPaymasterError {
     Transport(#[from] alloy::transports::TransportError),
     #[error("Withdrawal error: {0}")]
     Withdrawal(#[from] WithdrawalError),
-    #[error("Merkle tree error: {0}")]
-    MerkleTree(#[from] kohaku_merkle_tree::MerkleTreeError),
 }
 
 impl<S> UserOperationPaymasterExt for UserOperationBuilder<S> {
@@ -127,7 +127,7 @@ impl<S> UserOperationPaymasterExt for UserOperationBuilder<S> {
         provider: &impl Provider,
         bundler: &B,
         rng: &mut R,
-    ) -> Result<Self, TornadoPaymasterError>
+    ) -> Result<Self, PaymasterError>
     where
         R: rand::CryptoRng,
         B: Bundler + ?Sized,
@@ -135,7 +135,7 @@ impl<S> UserOperationPaymasterExt for UserOperationBuilder<S> {
         let pool = &withdrawal.pool;
         let info = pool
             .paymaster
-            .ok_or_else(|| TornadoPaymasterError::PoolMissingPaymaster(pool.clone()))?;
+            .ok_or_else(|| PaymasterError::PoolMissingPaymaster(pool.clone()))?;
 
         let (builder, fee) =
             estimate_fee(self, &withdrawal, info, merkle_proof, provider, bundler).await?;
@@ -162,7 +162,7 @@ async fn estimate_fee<S, B>(
     merkle_proof: &MerkleProof,
     provider: &impl Provider,
     bundler: &B,
-) -> Result<(UserOperationBuilder<S>, U256), TornadoPaymasterError>
+) -> Result<(UserOperationBuilder<S>, U256), PaymasterError>
 where
     B: Bundler + ?Sized,
 {
@@ -192,10 +192,10 @@ where
         .with_gas_estimate(bundler, Some(&overrides))
         .await?;
 
-    let cost = gas_cost(provider, pool, &builder).await?;
+    let cost = gas_cost(provider, pool, info.address, &builder).await?;
     let fee = cost + cost * U256::from(FEE_BUFFER_BPS) / U256::from(10_000);
     if fee > denomination {
-        return Err(TornadoPaymasterError::InsufficientDenomination {
+        return Err(PaymasterError::InsufficientDenomination {
             required: fee,
             denomination,
         });
@@ -211,7 +211,7 @@ where
 async fn verifier_override(
     provider: &impl Provider,
     pool: &Pool,
-) -> Result<StateOverride, TornadoPaymasterError> {
+) -> Result<StateOverride, PaymasterError> {
     let verifier = provider.verifier(pool).await?;
     let code = provider.get_code_at(verifier).await?;
 
@@ -225,14 +225,22 @@ async fn verifier_override(
 async fn gas_cost<S>(
     provider: &impl Provider,
     pool: &Pool,
+    paymaster: Address,
     builder: &UserOperationBuilder<S>,
-) -> Result<U256, TornadoPaymasterError> {
+) -> Result<U256, PaymasterError> {
     let user_op = builder.build();
     let gas = U256::from(user_op.total_gas_limit());
-    let price =
-        U256::from(user_op.user_op.max_fee_per_gas + user_op.user_op.max_priority_fee_per_gas);
+    let price = U256::from(user_op.user_op.max_fee_per_gas);
+    let cost = gas * price;
 
-    Ok(provider.quote_wei_in_fee_token(pool, gas * price).await?)
+    let Asset::Erc20 { address: token, .. } = pool.asset else {
+        return Ok(cost);
+    };
+
+    Ok(TornadoPaymaster::new(paymaster, provider)
+        .quoteWeiInToken(token, cost)
+        .call()
+        .await?)
 }
 
 fn encode_paymaster_data(adapter: Address, withdrawal: &ProvenWithdrawal) -> Bytes {
