@@ -1,0 +1,48 @@
+[package]
+name = "kohaku-tornadocash-paymaster"
+version = "0.0.1"
+edition = "2024"
+description = "Tornado Cash 4337 paymaster client"
+license.workspace = true
+repository.workspace = true
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+alloy = { workspace = true, features = [
+    "rpc",
+    "rpc-types",
+    "network",
+    "providers",
+    "transports",
+    "sol-types",
+    "reqwest",
+] }
+kohaku-tornadocash = { workspace = true }
+kohaku-userop-kit = { workspace = true }
+rand = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread"] }
+
+[build-dependencies]
+cfg_aliases = { workspace = true }
+
+[dev-dependencies]
+alloy = { workspace = true, features = [
+    "signers",
+    "signer-local",
+    "provider-anvil-node",
+] }
+anyhow = { workspace = true }
+insta = { workspace = true }
+kohaku-fork-kit = { workspace = true }
+kohaku-tornadocash-syncer = { workspace = true }
+tokio = { workspace = true, features = ["macros", "process"] }
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
+
+[lints]
+workspace = true

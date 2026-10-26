@@ -53,6 +53,8 @@
               cargo-machete
               cargo-sort
               cargo-insta
+              cargo-semver-checks
+              git-cliff
 
               # JS tooling
               wasm-bindgen-cli_0_2_108

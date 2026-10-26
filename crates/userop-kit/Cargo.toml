@@ -1,7 +1,10 @@
 [package]
 name = "kohaku-userop-kit"
-version = "0.1.0"
+version = "0.0.1"
 edition = "2024"
+description = "EIP-4337 client"
+license.workspace = true
+repository.workspace = true
 
 [lib]
 crate-type = ["rlib"]

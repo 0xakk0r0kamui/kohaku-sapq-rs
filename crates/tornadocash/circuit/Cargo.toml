@@ -1,0 +1,32 @@
+[package]
+name = "kohaku-tornadocash-circuit"
+version = "0.1.0"
+edition = "2024"
+description = "Tornado Cash withdrawal circuit artifacts and Groth16 prover"
+license.workspace = true
+repository.workspace = true
+
+[features]
+default = []
+parallel = ["websnark-rs/parallel"]
+
+[dependencies]
+brotli = { workspace = true }
+postcard = { workspace = true }
+rand = { workspace = true }
+ruint = { workspace = true, features = ["ark-ff-06", "serde"] }
+serde = { workspace = true, features = ["derive"] }
+thiserror = { workspace = true }
+websnark-rs = { workspace = true }
+
+[dev-dependencies]
+criterion = { workspace = true, features = ["async_tokio"] }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+
+[lints]
+workspace = true
+
+[[bench]]
+name = "prove"
+harness = false

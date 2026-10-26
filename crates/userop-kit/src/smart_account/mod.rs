@@ -35,6 +35,7 @@ pub trait SmartAccount {
 }
 
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum SmartAccountError {
     #[error("Provider error: {0}")]
     ProviderError(#[from] alloy::transports::RpcError<alloy::transports::TransportErrorKind>),

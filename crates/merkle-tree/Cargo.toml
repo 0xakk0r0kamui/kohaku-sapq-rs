@@ -2,6 +2,9 @@
 name = "kohaku-merkle-tree"
 version = "0.1.0"
 edition = "2024"
+description = "Generic Merkle Tree implementation"
+license.workspace = true
+repository.workspace = true
 
 [features]
 default = []
