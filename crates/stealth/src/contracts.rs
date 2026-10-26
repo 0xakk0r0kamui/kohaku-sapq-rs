@@ -10,7 +10,7 @@ use tracing::debug;
 
 use crate::{
     abis::{IERC5564Announcer, IERC6538Registry},
-    scheme3::{StealthAddress, StealthMetaAddress},
+    scheme3::{Announcement, MetaAddress},
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -22,10 +22,7 @@ pub struct Deployment {
 }
 
 /// Builds an unsigned ERC-6538 `registerKeys` transaction.
-pub fn register_keys(
-    deployment: &Deployment,
-    meta_address: &StealthMetaAddress,
-) -> TransactionRequest {
+pub fn register_keys(deployment: &Deployment, meta_address: &MetaAddress) -> TransactionRequest {
     let call = IERC6538Registry::registerKeysCall {
         schemeId: U256::from(SchemeId3::SCHEME_ID),
         stealthMetaAddress: SchemeId3::meta_to_bytes(meta_address).into(),
@@ -47,7 +44,7 @@ pub fn register_keys_on_behalf(
     deployment: &Deployment,
     registrant: Address,
     signature: &[u8],
-    meta_address: &StealthMetaAddress,
+    meta_address: &MetaAddress,
 ) -> TransactionRequest {
     let call = IERC6538Registry::registerKeysOnBehalfCall {
         registrant,
@@ -71,10 +68,9 @@ pub fn register_keys_on_behalf(
 /// Builds an unsigned ERC-5564 announcement transaction.
 pub fn prepare_announcement(
     deployment: &Deployment,
-    stealth_address: &StealthAddress,
+    announcement: &Announcement,
 ) -> TransactionRequest {
-    let (address, ephemeral_public_key, metadata) =
-        SchemeId3::announcement_to_bytes(stealth_address);
+    let (address, ephemeral_public_key, metadata) = SchemeId3::announcement_to_bytes(announcement);
     let call = IERC5564Announcer::announceCall {
         schemeId: U256::from(SchemeId3::SCHEME_ID),
         stealthAddress: Address::from(address),

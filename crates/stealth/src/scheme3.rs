@@ -6,8 +6,7 @@ use zeroize::Zeroizing;
 
 pub use pqsa_core::{Error as EngineError, StealthScheme};
 pub use pqsa_per_payment::{
-    Announcement as StealthAddress, Master, Match, MetaAddress as StealthMetaAddress, Scanner,
-    SchemeId3, SpendKey, Tracking,
+    Announcement, Master, Match, MetaAddress, Scanner, SchemeId3, SpendKey, Tracking,
 };
 pub use secrecy::ExposeSecret;
 
@@ -51,7 +50,7 @@ impl core::fmt::Debug for AccountSeed {
 
 #[derive(Debug)]
 pub struct Account {
-    meta_address: StealthMetaAddress,
+    meta_address: MetaAddress,
     master_key: Master,
     tracking_key: Tracking,
 }
@@ -118,7 +117,7 @@ impl Account {
     }
 
     #[must_use]
-    pub fn meta_address(&self) -> &StealthMetaAddress {
+    pub fn meta_address(&self) -> &MetaAddress {
         &self.meta_address
     }
 
@@ -148,9 +147,9 @@ impl Account {
 ///
 /// Forwards engine errors. Returns [`EngineError::SeedRejected`] after four rejected seeds.
 pub fn generate_stealth_address(
-    meta_address: &StealthMetaAddress,
+    meta_address: &MetaAddress,
     rng: &mut impl CryptoRng,
-) -> Result<StealthAddress, SchemeError> {
+) -> Result<Announcement, SchemeError> {
     for _ in 0..RANDOM_ANNOUNCEMENT_ATTEMPTS {
         let mut seed = Zeroizing::new([0u8; 64]);
         rng.fill_bytes(seed.as_mut());
@@ -439,8 +438,7 @@ mod tests {
         let account = Account::from_keygen_master(&[7; 32]).unwrap().account;
         let meta = account.meta_address();
         let recipient =
-            StealthMetaAddress::new(meta.spending, meta.viewing_ec, vec![0xff; meta.ek().len()])
-                .unwrap();
+            MetaAddress::new(meta.spending, meta.viewing_ec, vec![0xff; meta.ek().len()]).unwrap();
         let mut rng = SeedRng {
             bytes: vec![0x44; 2 * 64],
             consumed: 0,

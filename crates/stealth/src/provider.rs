@@ -8,7 +8,7 @@ use pqsa_per_payment::SchemeId3;
 use thiserror::Error;
 use tracing::debug;
 
-use crate::{abis::IERC6538Registry, contracts::Deployment, scheme3::StealthMetaAddress};
+use crate::{abis::IERC6538Registry, contracts::Deployment, scheme3::MetaAddress};
 
 #[derive(Debug, Error)]
 pub enum ContractError {
@@ -33,7 +33,7 @@ pub trait StealthProviderExt: Provider {
         &self,
         deployment: &Deployment,
         registrant: Address,
-    ) -> impl Future<Output = Result<Option<StealthMetaAddress>, ContractError>>;
+    ) -> impl Future<Output = Result<Option<MetaAddress>, ContractError>>;
 }
 
 impl<P: Provider> StealthProviderExt for P {
@@ -41,7 +41,7 @@ impl<P: Provider> StealthProviderExt for P {
         &self,
         deployment: &Deployment,
         registrant: Address,
-    ) -> Result<Option<StealthMetaAddress>, ContractError> {
+    ) -> Result<Option<MetaAddress>, ContractError> {
         let actual_chain_id = self.get_chain_id().await?;
         if actual_chain_id != deployment.chain_id {
             return Err(ContractError::WrongChain {
